@@ -10,7 +10,7 @@ The maze is a directed graph on a square grid.
 Each pair of side-by-side cells is joined by a wall (rock), a two-way passage, or a one-way passage drawn as a current of chevrons you can only swim along with.
 Topologically this is the same as a stack of platforms joined by ladders (two-way) and holes in the floor (one-way down), except that a general grid maze also allows one-way loops.
 
-The game draws each maze in one of two ways, chosen at random for each new maze unless fixed in the settings:
+The game draws each maze in one of two ways; the みかた ⇄ button at the top left switches to the other view with a fresh maze:
 
 - **よこから** (from the side): rows are floors, up to eight of them, seen side-on.
   Rock pillars block the way along a floor, ladders join floors both ways, and black oval holes in the floor drop her one floor down with no way back up.
@@ -36,7 +36,7 @@ Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 5 to 14 colum
 - ⚙️ settings:
   - **くらさ** (darkness): あかるい shows the whole maze; ランタン (default) shows what's near the octopus and dimly remembers where she has been; まっくら shows only what's near and remembers nothing.
   - **いきどまり の わな** (dead-end traps): off by default. On, some regions can be entered but not left; a 🌀 whirlpool button then takes her back to the start.
-  - **みかた** (view): どちらも lets the game pick a view for each maze; よこから and うえから fix one.
+  - **みかた** (view): よこから (default) or うえから, or どちらも to let the game pick a view for each maze.
   - **レベル** to jump between levels, and あたらしい めいろ for a fresh maze at the same level.
 
 Progress (level, pearls found, settings) is saved in the browser on that device.

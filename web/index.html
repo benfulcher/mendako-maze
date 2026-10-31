@@ -52,7 +52,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
   transition:opacity .3s;pointer-events:none;white-space:nowrap}
 #mapBtn{position:absolute;right:10px;top:10px;background:rgba(14,42,68,.9);border-radius:14px;padding:8px 12px;
   font-size:clamp(20px,3.2vmin,28px);box-shadow:0 4px 0 #0c2238;z-index:4}
-#mapBtn:focus{outline:none}
+#mapBtn:focus,#viewBtn:focus{outline:none}
+#viewBtn{position:absolute;left:10px;top:10px;background:rgba(14,42,68,.9);border-radius:14px;padding:8px 12px;
+  font-size:clamp(15px,2.4vmin,20px);box-shadow:0 4px 0 #0c2238;z-index:4}
 #mapBtn.on{background:#2a7fb8;box-shadow:0 4px 0 #17537a}
 #rescue{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#2a7fb8;
   border-radius:16px;padding:10px 18px;font-size:clamp(17px,2.8vmin,24px);box-shadow:0 4px 0 #17537a;z-index:4}
@@ -70,6 +72,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <div id="toast" hidden></div>
     <button id="rescue" hidden>🌀 うずしおで スタートに もどる</button>
     <button id="mapBtn" hidden title="ちず">🗺️</button>
+    <button id="viewBtn" title="みかたを かえる">みかた ⇄</button>
     <div id="win" class="overlay" hidden>
       <div class="card">
         <h2>やったー！</h2>
@@ -191,7 +194,7 @@ const SFX=(()=>{let ac=null;const on=()=>save.sound;
 
 // ---------------------------------------------------------------- state
 const SAVE='mendako-maze';
-let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1,view:'random'};
+let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1,view:'side'};
 try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE)||'{}'))}catch(e){}
 function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){}}
 
@@ -204,9 +207,9 @@ function params(L){
   return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
 
 let maze,pl,steps,won,anim=null,bump=null,seenCells,canReachGoal,hintCells=[],hintUntil=0,facing=1,swirl=0;
-function newMaze(){
+function newMaze(force){
   const rng=mulberry32((Date.now()^(Math.random()*1e9))>>>0);
-  curView=save.view==='random'?(rng()<.5?'side':'top'):save.view;
+  curView=force||(save.view==='random'?(Math.random()<.5?'side':'top'):save.view);
   const p=params(save.level);maze=generate(p.R,p.C,rng,p);mapMode=false;
   pl={r:0,c:0};steps=0;won=false;anim=null;bump=null;hintCells=[];facing=1;
   seenCells=new Set();canReachGoal=maze.bfs(maze.goal,true);
@@ -241,7 +244,9 @@ let holdT=null;
 for(const b of document.querySelectorAll('#pad [data-d]')){
   b.addEventListener('pointerdown',e=>{e.preventDefault();const d=+b.dataset.d;tryMove(d);clearInterval(holdT);holdT=setInterval(()=>tryMove(d),170)});
   for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
-$('hint').addEventListener('click',hint);$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
+$('hint').addEventListener('click',hint);
+$('viewBtn').addEventListener('click',e=>{const other=side()?'top':'side';if(save.view!=='random'){save.view=other;persist()}
+  newMaze(other);toast(other==='side'?'よこから みる：ゆかと はしご':'うえから みる：ながれ',1600);e.currentTarget.blur()});$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
 for(const b of document.querySelectorAll('#viewOpts button'))b.addEventListener('click',()=>{if(save.view===b.dataset.view)return;save.view=b.dataset.view;persist();syncSettings();newMaze()});$('rescue').addEventListener('click',rescue);
 const cv=$('cv');let sw=null;
 cv.addEventListener('pointerdown',e=>{sw={x:e.clientX,y:e.clientY};SFX.unlock()});
