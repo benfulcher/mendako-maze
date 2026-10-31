@@ -348,7 +348,7 @@ function drawSide(t){const R=maze.R,C=maze.C,th=Math.max(5,cell*.13),rock='#6d7f
   // outer rock
   ctx.strokeStyle=rock;ctx.lineWidth=th*1.3;ctx.strokeRect(ox,oy,cell*C,cell*R);
   // floor numbers
-  if(ox>=28){ctx.fillStyle='rgba(233,243,255,.45)';ctx.font=`${Math.round(Math.min(cell*.3,18))}px sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
+  if(ox>=64){ctx.fillStyle='rgba(233,243,255,.45)';ctx.font=`${Math.round(Math.min(cell*.3,18))}px sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
     for(let f=0;f<R;f++)ctx.fillText(`${R-f}かい`,ox-8,oy+(f+1)*cell-cell*.35)}
   drawPearl(cx(maze.goal[1]),oy+(maze.goal[0]+1)*cell-cell*.22,t)}
 function drawMendako(x,y,t,sx){const s=cell/100;ctx.save();ctx.translate(x,y+Math.sin(t/500)*cell*.03);ctx.scale(s*sx*.8,s*.8);
