@@ -14,7 +14,7 @@ The game draws each maze in one of two ways; the みかた ⇄ button at the top
 
 - **よこから** (from the side): rows are floors, up to eight of them, seen side-on.
   Rock pillars block the way along a floor, ladders join floors both ways, and black oval holes in the floor drop her one floor down with no way back up.
-  The pearl is on the bottom floor.
+  She starts at the bottom left and climbs the tower to a pearl somewhere in the top half, on the very top floor half the time, so sometimes the way is to climb past it and drop down onto it.
 - **うえから** (from above): a square grid seen from above, where one-way passages are currents of chevrons she can only swim along with.
 
 The view is zoomed in, with the camera following the octopus; when the maze doesn't fit on the screen a 🗺️ button toggles a view of the whole maze.
@@ -36,7 +36,7 @@ Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 5 to 14 colum
 - ⚙️ settings:
   - **くらさ** (darkness): あかるい shows the whole maze; ランタン (default) shows what's near the octopus and dimly remembers where she has been; まっくら shows only what's near and remembers nothing.
   - **いきどまり の わな** (dead-end traps): off by default. On, some regions can be entered but not left; a 🌀 whirlpool button then takes her back to the start.
-  - **みかた** (view): よこから (default) or うえから, or どちらも to let the game pick a view for each maze.
+  - **みかた** (view): よこから (default) or うえから.
   - **レベル** to jump between levels, and あたらしい めいろ for a fresh maze at the same level.
 
 Progress (level, pearls found, settings) is saved in the browser on that device.

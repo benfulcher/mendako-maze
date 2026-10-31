@@ -29,7 +29,9 @@ Generation
                 (the platform / ladder / hole picture)
      --platform rows are floors seen from the side: horizontal edges are
                 walls or open, vertical two-way edges are ladders (H) and
-                the only one-way edges are holes (o) that drop you one floor
+                the only one-way edges are holes (o) that drop you one floor.
+                You start bottom-left and climb to a goal in the top half
+                (on the very top floor half the time)
 
 Usage
 -----
@@ -215,8 +217,12 @@ def generate(n, seed=None, oneway=0.25, loops=None, fair=False, gravity=False,
     """Build a maze; returns (maze, one-way edges made, one-way edges targeted)."""
     rng = random.Random(seed)
     rows = rows or n
-    start = start or (0, 0)
-    goal = goal or (rows - 1, n - 1)
+    if platform:
+        start = start or (rows - 1, 0)
+        goal = goal or (0 if rng.random() < 0.5 else rng.randrange((rows + 1) // 2), rng.randrange(n))
+    else:
+        start = start or (0, 0)
+        goal = goal or (rows - 1, n - 1)
     maze = Maze(rows, n, start, goal)
     carve_tree(maze, rng)
     add_loops(maze, rng, max(rows, n) if loops is None else loops)

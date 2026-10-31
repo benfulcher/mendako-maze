@@ -84,7 +84,6 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
       <div class="card">
         <h2>せってい</h2>
         <div class="opt"><span>みかた</span><div class="row" id="viewOpts">
-          <button data-view="random">どちらも</button>
           <button data-view="side">よこから</button>
           <button data-view="top">うえから</button></div></div>
         <div class="opt"><span>くらさ</span><div class="row" id="fogOpts">
@@ -152,7 +151,11 @@ class Maze{
     return true}
 }
 function generate(R,C,rng,o){
-  const m=new Maze(R,C,[0,0],[R-1,C-1]);
+  // From above: top-left to bottom-right.  From the side: climb the tower from the
+  // bottom-left to a pearl somewhere in the top half, on the very top floor half the time.
+  let start=[0,0],goal=[R-1,C-1];
+  if(o.platform){start=[R-1,0];goal=[rng()<.5?0:Math.floor(rng()*Math.ceil(R/2)),Math.floor(rng()*C)]}
+  const m=new Maze(R,C,start,goal);
   // 1. spanning tree of two-way passages (recursive backtracker)
   const seen=Array.from({length:R},()=>Array(C).fill(false));
   const r0=Math.floor(rng()*R),c0=Math.floor(rng()*C);seen[r0][c0]=true;const st=[[r0,c0]];
@@ -196,6 +199,7 @@ const SFX=(()=>{let ac=null;const on=()=>save.sound;
 const SAVE='mendako-maze';
 let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1,view:'side'};
 try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE)||'{}'))}catch(e){}
+if(save.view!=='top')save.view='side';
 function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){}}
 
 let curView='side',mapMode=false,fits=true;
@@ -207,11 +211,11 @@ function params(L){
   return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
 
 let maze,pl,steps,won,anim=null,bump=null,seenCells,canReachGoal,hintCells=[],hintUntil=0,facing=1,swirl=0;
-function newMaze(force){
+function newMaze(){
   const rng=mulberry32((Date.now()^(Math.random()*1e9))>>>0);
-  curView=force||(save.view==='random'?(Math.random()<.5?'side':'top'):save.view);
+  curView=save.view;
   const p=params(save.level);maze=generate(p.R,p.C,rng,p);mapMode=false;
-  pl={r:0,c:0};steps=0;won=false;anim=null;bump=null;hintCells=[];facing=1;
+  pl={r:maze.start[0],c:maze.start[1]};steps=0;won=false;anim=null;bump=null;hintCells=[];facing=1;
   seenCells=new Set();canReachGoal=maze.bfs(maze.goal,true);
   reveal();$('win').hidden=true;$('rescue').hidden=true;status();if(W)layout()}
 function reveal(){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=pl.r+dr,c=pl.c+dc;if(maze.inside(r,c))seenCells.add(r*maze.C+c)}}
@@ -245,8 +249,8 @@ for(const b of document.querySelectorAll('#pad [data-d]')){
   b.addEventListener('pointerdown',e=>{e.preventDefault();const d=+b.dataset.d;tryMove(d);clearInterval(holdT);holdT=setInterval(()=>tryMove(d),170)});
   for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
 $('hint').addEventListener('click',hint);
-$('viewBtn').addEventListener('click',e=>{const other=side()?'top':'side';if(save.view!=='random'){save.view=other;persist()}
-  newMaze(other);toast(other==='side'?'よこから みる：ゆかと はしご':'うえから みる：ながれ',1600);e.currentTarget.blur()});$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
+$('viewBtn').addEventListener('click',e=>{save.view=side()?'top':'side';persist();syncSettings();
+  newMaze();toast(save.view==='side'?'よこから みる：ゆかと はしご':'うえから みる：ながれ',1600);e.currentTarget.blur()});$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
 for(const b of document.querySelectorAll('#viewOpts button'))b.addEventListener('click',()=>{if(save.view===b.dataset.view)return;save.view=b.dataset.view;persist();syncSettings();newMaze()});$('rescue').addEventListener('click',rescue);
 const cv=$('cv');let sw=null;
 cv.addEventListener('pointerdown',e=>{sw={x:e.clientX,y:e.clientY};SFX.unlock()});
