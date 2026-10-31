@@ -58,7 +58,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #fogBtn.off{opacity:.55}
 #mapBtn{right:72px}
 #viewBtn{position:absolute;left:10px;top:10px;background:rgba(14,42,68,.9);border-radius:14px;padding:8px 12px;
-  font-size:clamp(15px,2.4vmin,20px);box-shadow:0 4px 0 #0c2238;z-index:4}
+  font-size:clamp(14px,2.2vmin,19px);white-space:nowrap;box-shadow:0 4px 0 #0c2238;z-index:4}
 #mapBtn.on{background:#2a7fb8;box-shadow:0 4px 0 #17537a}
 #rescue{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#2a7fb8;
   border-radius:16px;padding:10px 18px;font-size:clamp(17px,2.8vmin,24px);box-shadow:0 4px 0 #17537a;z-index:4}
@@ -295,6 +295,7 @@ for(const b of document.querySelectorAll('#pad [data-d]')){
   for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
 $('hint').addEventListener('click',hint);
 const VIEW_NAMES={side:'よこから：はしごと あな',drop:'よこから：あなに おちる！',mix:'よこから：ぜんぶ（あな・おちる あな・ふんすい）',top:'うえから：ながれ'};
+const VIEW_SHORT={side:'はしごと あな',drop:'おちる あな',mix:'ぜんぶ',top:'うえから'};
 $('viewBtn').addEventListener('click',e=>{save.view={side:'drop',drop:'mix',mix:'top',top:'side'}[save.view];persist();syncSettings();
   newMaze();toast(VIEW_NAMES[save.view],1800);e.currentTarget.blur()});
 // 🔦 turns the fog off and back on (back to whatever it was before)
@@ -315,7 +316,7 @@ $('lvUp').addEventListener('click',()=>{save.level=Math.min(40,save.level+1);per
 for(const b of document.querySelectorAll('#fogOpts button'))b.addEventListener('click',()=>{save.fog=b.dataset.fog;persist();syncSettings()});
 for(const b of document.querySelectorAll('#trapOpts button'))b.addEventListener('click',()=>{save.traps=+b.dataset.trap;persist();syncSettings()});
 for(const b of document.querySelectorAll('#sndOpts button'))b.addEventListener('click',()=>{save.sound=+b.dataset.snd;persist();syncSettings()});
-function syncSettings(){$('lvShow').textContent=save.level;status();$('fogBtn').classList.toggle('off',save.fog==='none');
+function syncSettings(){$('lvShow').textContent=save.level;status();$('viewBtn').textContent=`${VIEW_SHORT[save.view]} ⇄`;$('fogBtn').classList.toggle('off',save.fog==='none');
   for(const b of document.querySelectorAll('#viewOpts button'))b.classList.toggle('on',b.dataset.view===save.view);
   for(const b of document.querySelectorAll('#fogOpts button'))b.classList.toggle('on',b.dataset.fog===save.fog);
   for(const b of document.querySelectorAll('#trapOpts button'))b.classList.toggle('on',+b.dataset.trap===save.traps);
