@@ -30,8 +30,10 @@ Generation
      --platform rows are floors seen from the side: horizontal edges are
                 walls or open, vertical two-way edges are ladders (H) and
                 the only one-way edges are holes (o) that drop you one floor.
-                You start bottom-left and climb to a goal in the top half
-                (on the very top floor half the time)
+                You start bottom-left.
+     --far-goal put the goal at the cell with the longest shortest path from
+                the start (as the game does), instead of the far corner;
+                with --platform it stays in the top half of the tower
 
 Usage
 -----
@@ -112,6 +114,25 @@ class Maze:
 
     def can_reach_goal(self):
         return set(self.bfs(self.goal, self.predecessors))
+
+    def distances(self, src):
+        """Shortest directed distance from src to every reachable cell."""
+        dist = {src: 0}
+        q = deque([src])
+        while q:
+            u = q.popleft()
+            for v in self.successors(u):
+                if v not in dist:
+                    dist[v] = dist[u] + 1
+                    q.append(v)
+        return dist
+
+    def farthest_cells(self, rng, top_half=False):
+        """Reachable cells, farthest from the start first (ties in random order)."""
+        dist = self.distances(self.start)
+        cells = [c for c in dist if not top_half or c[0] < (self.rows + 1) // 2]
+        rng.shuffle(cells)
+        return sorted(cells, key=lambda c: -dist[c])
 
     def solution(self):
         """Shortest directed path start -> goal, or None."""
@@ -213,20 +234,24 @@ def orient_edges(maze, rng, fraction, fair, gravity, keep_all, platform=False):
 
 
 def generate(n, seed=None, oneway=0.25, loops=None, fair=False, gravity=False,
-             keep_all=False, start=None, goal=None, rows=None, platform=False):
+             keep_all=False, start=None, goal=None, rows=None, platform=False,
+             far_goal=False):
     """Build a maze; returns (maze, one-way edges made, one-way edges targeted)."""
     rng = random.Random(seed)
     rows = rows or n
-    if platform:
-        start = start or (rows - 1, 0)
-        goal = goal or (0 if rng.random() < 0.5 else rng.randrange((rows + 1) // 2), rng.randrange(n))
-    else:
-        start = start or (0, 0)
-        goal = goal or (rows - 1, n - 1)
-    maze = Maze(rows, n, start, goal)
+    start = start or ((rows - 1, 0) if platform else (0, 0))
+    maze = Maze(rows, n, start, goal or (rows - 1, n - 1))
     carve_tree(maze, rng)
     add_loops(maze, rng, max(rows, n) if loops is None else loops)
+    if far_goal and goal is None:
+        maze.goal = maze.farthest_cells(rng, platform)[0]  # provisional, before any one-way edges
     made, target = orient_edges(maze, rng, oneway, fair, gravity, keep_all, platform)
+    if far_goal and goal is None:
+        # the farthest cell for which the maze is still valid (the provisional one always is)
+        for cell in maze.farthest_cells(rng, platform):
+            maze.goal = cell
+            if maze.is_valid(fair, gravity, keep_all):
+                break
     assert maze.solution() is not None, "generator produced an unsolvable maze"
     return maze, made, target
 
@@ -362,6 +387,8 @@ def main(argv=None):
     p.add_argument("--rows", type=int, help="rows, or floors with --platform (default: same as --size)")
     p.add_argument("--platform", action="store_true",
                    help="side view: floors joined by ladders (two-way) and holes (down only)")
+    p.add_argument("--far-goal", action="store_true",
+                   help="put the goal at the cell farthest (by shortest path) from the start")
     p.add_argument("--seed", type=int, help="random seed for a reproducible maze")
     p.add_argument("--oneway", type=float, default=0.25,
                    help="target fraction of passages made one-way (default 0.25)")
@@ -385,7 +412,8 @@ def main(argv=None):
     maze, made, target = generate(
         args.size, seed=args.seed, oneway=args.oneway, loops=args.loops,
         fair=args.fair, gravity=args.gravity, keep_all=args.keep_all,
-        start=args.start, goal=args.goal, rows=args.rows, platform=args.platform)
+        start=args.start, goal=args.goal, rows=args.rows, platform=args.platform,
+        far_goal=args.far_goal)
     path = maze.solution()
     floors = maze.oneway_floors() if args.gravity else None
 

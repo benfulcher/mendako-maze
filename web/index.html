@@ -129,6 +129,7 @@ class Maze{
     this.h=Array.from({length:R},()=>Array(C-1).fill(0));
     this.v=Array.from({length:R-1},()=>Array(C).fill(0))}
   inside(r,c){return r>=0&&c>=0&&r<this.R&&c<this.C}
+  cellsShuffled(rng){const a=[];for(let r=0;r<this.R;r++)for(let c=0;c<this.C;c++)a.push([r,c]);return shuffle(a,rng)}
   edge(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(!this.inside(nr,nc))return null;
     return DIRS[d][0]===0?{arr:this.h,i:r,j:Math.min(c,nc),fwd:nc>c}:{arr:this.v,i:Math.min(r,nr),j:c,fwd:nr>r}}
   state(r,c,d){const e=this.edge(r,c,d);return e?e.arr[e.i][e.j]:0}
@@ -143,6 +144,10 @@ class Maze{
       if(!(back?this.canCome(r,c,d):this.canGo(r,c,d)))continue;
       const nr=r+DIRS[d][0],nc=c+DIRS[d][1],k=nr*n+nc;if(par[k]<0){par[k]=r*n+c;q.push([nr,nc])}}}
     return par}
+  dist(src){const n=this.C,d=new Int32Array(this.R*n).fill(-1),q=[src];d[src[0]*n+src[1]]=0;
+    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi],k0=r*n+c;for(let dd=0;dd<4;dd++){if(!this.canGo(r,c,dd))continue;
+      const nr=r+DIRS[dd][0],nc=c+DIRS[dd][1],k=nr*n+nc;if(d[k]<0){d[k]=d[k0]+1;q.push([nr,nc])}}}
+    return d}
   pathFrom(src){const n=this.C,par=this.bfs(src,false),g=this.goal[0]*n+this.goal[1];if(par[g]<0)return null;
     const out=[];let k=g;for(;;){out.push([Math.floor(k/n),k%n]);if(k===src[0]*n+src[1])break;k=par[k]}return out.reverse()}
   valid(o){const n=this.C,fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
@@ -151,11 +156,13 @@ class Maze{
     return true}
 }
 function generate(R,C,rng,o){
-  // From above: top-left to bottom-right.  From the side: climb the tower from the
-  // bottom-left to a pearl somewhere in the top half, on the very top floor half the time.
-  let start=[0,0],goal=[R-1,C-1];
-  if(o.platform){start=[R-1,0];goal=[rng()<.5?0:Math.floor(rng()*Math.ceil(R/2)),Math.floor(rng()*C)]}
-  const m=new Maze(R,C,start,goal);
+  // Start top-left from above, bottom-left from the side (climb the tower).  The pearl
+  // goes at the cell with the longest shortest path from the start.
+  const start=o.platform?[R-1,0]:[0,0];
+  const m=new Maze(R,C,start,[R-1,C-1]);
+  // From the side the pearl stays in the top half of the tower, so she always climbs for it.
+  const farthest=()=>{const d=m.dist(start),cells=m.cellsShuffled(rng).filter(([r,c])=>d[r*C+c]>=0&&(!o.platform||r<Math.ceil(R/2)));
+    cells.sort((a,b)=>d[b[0]*C+b[1]]-d[a[0]*C+a[1]]);return cells};
   // 1. spanning tree of two-way passages (recursive backtracker)
   const seen=Array.from({length:R},()=>Array(C).fill(false));
   const r0=Math.floor(rng()*R),c0=Math.floor(rng()*C);seen[r0][c0]=true;const st=[[r0,c0]];
@@ -172,10 +179,13 @@ function generate(R,C,rng,o){
   //    Platform mode: only vertical edges, and only downward (holes in the floor).
   const open=[];if(!o.platform)for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
   for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1)open.push([m.v,r,c]);
+  m.goal=farthest()[0];  // provisional goal before any one-way edges
   shuffle(open,rng);const target=Math.round(o.oneway*open.length);let made=0;
   for(const [a,i,j] of open){if(made>=target)break;const first=rng()<.5?2:3;let ok=false;
     for(const s of (o.platform?[2]:[first,5-first])){a[i][j]=s;if(m.valid(o)){ok=true;break}}
     if(ok)made++;else a[i][j]=1}
+  // Final goal: the farthest cell for which the maze is still valid (the provisional one always is).
+  for(const g of farthest()){m.goal=g;if(m.valid(o))break}
   return m;
 }
 
@@ -205,7 +215,7 @@ function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){
 let curView='side',mapMode=false,fits=true;
 const side=()=>curView==='side';
 function params(L){
-  if(side()){const R=Math.min(3+Math.ceil(L/2),8),C=Math.min(4+Math.ceil(L/3),14);
+  if(side()){const R=Math.min(3+Math.ceil(L/2),8),C=Math.min(10+Math.floor(L/3),14);
     return{R,C,oneway:Math.min(.3+.05*L,.7),loops:Math.round((R+C)/2),fair:!save.traps,keepAll:true,platform:true}}
   const n=Math.min(4+Math.ceil(L/2),12);
   return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
@@ -277,7 +287,8 @@ const ctx=cv.getContext('2d'),fogc=document.createElement('canvas'),fctx=fogc.ge
 let W=0,H=0,dpr=1,cell=0,ox=0,oy=0;
 function layout(){const st=$('stage');W=st.clientWidth;H=st.clientHeight;dpr=Math.min(window.devicePixelRatio||1,3);
   cv.width=fogc.width=Math.round(W*dpr);cv.height=fogc.height=Math.round(H*dpr);
-  const fit=Math.floor(Math.min(W*.95/maze.C,H*.94/maze.R)),zoom=Math.floor(Math.min(W,H)/5.2);
+  const fit=Math.floor(Math.min(W*.95/maze.C,H*.94/maze.R)),std=Math.min(W,H)/5.2,
+    zoom=Math.floor(side()&&W*.95/maze.C>=56?Math.min(W*.95/maze.C,H/5.2):std);
   fits=zoom<=fit;cell=(fits||mapMode)?fit:zoom;$('mapBtn').hidden=fits;$('mapBtn').classList.toggle('on',mapMode);
   camSnap=true;camera()}
 // Camera: centred on the octopus, clamped to the maze; the whole maze is centred when it fits.

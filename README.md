@@ -14,10 +14,10 @@ The game draws each maze in one of two ways; the みかた ⇄ button at the top
 
 - **よこから** (from the side): rows are floors, up to eight of them, seen side-on.
   Rock pillars block the way along a floor, ladders join floors both ways, and black oval holes in the floor drop her one floor down with no way back up.
-  She starts at the bottom left and climbs the tower to a pearl somewhere in the top half, on the very top floor half the time, so sometimes the way is to climb past it and drop down onto it.
+  She starts at the bottom left and climbs the tower to the pearl.
 - **うえから** (from above): a square grid seen from above, where one-way passages are currents of chevrons she can only swim along with.
 
-The view is zoomed in, with the camera following the octopus; when the maze doesn't fit on the screen a 🗺️ button toggles a view of the whole maze.
+The view is zoomed in, with the camera following the octopus (from the side a whole floor's width is always shown, and the camera scrolls up the tower); when the maze doesn't fit on the screen a 🗺️ button toggles a view of the whole maze.
 
 Each level is generated fresh:
 
@@ -25,8 +25,10 @@ Each level is generated fresh:
 2. Some extra walls are removed to make loops.
 3. Passages are turned one-way one at a time, in random order, and each change is kept only if the goal is still reachable from the start.
    By default the maze is also *fair*: every cell you can reach can still reach the goal, so a wrong turn costs time but never the game.
+4. The pearl goes at the cell with the longest shortest path from the start, so it is as far away as the maze allows.
+   From the side it stays in the top half of the tower: often the top floor, but sometimes a spot you have to climb past and drop down onto.
 
-Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 5 to 14 columns from the side) and gain more one-way passages.
+Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 10 to 14 tiles wide from the side) and gain more one-way passages.
 
 ## Playing
 
@@ -49,5 +51,5 @@ Progress (level, pearls found, settings) is saved in the browser on that device.
 python3 maze_gen.py -n 12 --seed 1 --solution            # ASCII maze with the solution marked
 python3 maze_gen.py -n 20 --fair --keep-all --svg maze.svg --json maze.json
 python3 maze_gen.py -n 10 --gravity                       # one-way edges never form a cycle (every cell gets a floor number)
-python3 maze_gen.py -n 12 --rows 8 --platform --fair      # side view: 8 floors, ladders (H) and holes (o)
+python3 maze_gen.py -n 12 --rows 8 --platform --fair --far-goal   # side view: 8 floors, ladders (H) and holes (o)
 ```
