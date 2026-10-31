@@ -13,7 +13,8 @@ Topologically this is the same as a stack of platforms joined by ladders (two-wa
 The game draws each maze in one of two ways; the みかた ⇄ button at the top left switches to the other view with a fresh maze:
 
 - **よこから** (from the side): rows are floors, up to eight of them, seen side-on.
-  Rock pillars block the way along a floor, ladders join floors both ways, and black oval holes in the floor drop her one floor down with no way back up.
+  Rock pillars block the way along a floor, ladders join floors both ways, and coral trap doors in the floor drop her one floor down with no way back up.
+  Towers are sparse: floors are long corridors with only a few ladders, doors and pillars each.
   She starts at the bottom left and climbs the tower to the pearl.
 - **よこから・あなに おちる** (from the side, falling holes): the same tower, but a hole swallows its whole cell.
   She can't stand there or walk past it: stepping in drops her to the first solid floor below, through several floors if the holes line up.

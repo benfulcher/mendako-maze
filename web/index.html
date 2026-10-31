@@ -192,16 +192,18 @@ function generate(R,C,rng,o){
   while(st.length){const [r,c]=st[st.length-1],opt=[];
     for(let d=0;d<4;d++){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(m.inside(nr,nc)&&!seen[nr][nc])opt.push(d)}
     if(!opt.length){st.pop();continue}
-    const d=opt[Math.floor(rng()*opt.length)],e=m.edge(r,c,d);e.arr[e.i][e.j]=1;
+    // From the side, prefer walking along a floor to climbing: long corridors, few ladders.
+    const horiz=opt.filter(d=>DIRS[d][0]===0),pick=(o.hbias&&horiz.length&&rng()<o.hbias)?horiz:opt;
+    const d=pick[Math.floor(rng()*pick.length)],e=m.edge(r,c,d);e.arr[e.i][e.j]=1;
     const nr=r+DIRS[d][0],nc=c+DIRS[d][1];seen[nr][nc]=true;st.push([nr,nc])}
   // 2. extra openings, so there are loops
   const walls=[];for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(!m.h[r][c])walls.push([m.h,r,c]);
-  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(!m.v[r][c])walls.push([m.v,r,c]);
+  if(!o.platform)for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(!m.v[r][c])walls.push([m.v,r,c]);
   shuffle(walls,rng);for(const [a,i,j] of walls.slice(0,o.loops))a[i][j]=1;
   // 3. one-way passages, each kept only if the maze stays valid.
   //    Platform mode: only vertical edges, and only downward (holes in the floor).
   const open=[];if(!o.platform)for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
-  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1||o.kinds)open.push([m.v,r,c]);  // forced holes and vents can open a solid floor too
+  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1||o.platform)open.push([m.v,r,c]);  // from the side, holes and vents can open a solid floor too
   m.goal=farthest()[0];  // provisional goal before any one-way edges
   shuffle(open,rng);const target=Math.round(o.oneway*open.length);let made=0;
   // Can edge (i,j), between cell (i,j) above and (i+1,j) below, take state s?
@@ -247,9 +249,10 @@ let curView='side',mapMode=false,fits=true;
 const side=()=>curView!=='top';
 // Vertical features each side class may place: 2 optional hole, 4 forced hole, 5 vent.
 const KINDS={side:null,drop:[4],mix:[2,4,4,5,5]};
+let HBIAS=.8;  // chance the tower carver walks along the floor rather than climbing, when it can
 function params(L){
   if(side()){const R=Math.min(3+Math.ceil(L/2),8),C=Math.min(10+Math.floor(L/3),14),kinds=KINDS[curView];
-    return{R,C,oneway:kinds?Math.min(.18+.03*L,.4):Math.min(.3+.05*L,.7),loops:Math.round((R+C)/2),fair:!save.traps,keepAll:true,platform:true,kinds}}
+    return{R,C,oneway:(kinds?Math.min(.09+.015*L,.2):Math.min(.08+.012*L,.18)),loops:Math.max(1,Math.round((R+C)/9)),fair:!save.traps,keepAll:true,platform:true,kinds,hbias:HBIAS}}
   const n=Math.min(4+Math.ceil(L/2),12);
   return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
 
@@ -262,7 +265,7 @@ function newMaze(){
   seenCells=new Set();canReachGoal=maze.bfs(maze.goal,true);
   reveal();$('win').hidden=true;$('rescue').hidden=true;status();if(W)layout()}
 function reveal(){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=pl.r+dr,c=pl.c+dc;if(maze.inside(r,c))seenCells.add(r*maze.C+c)}}
-function status(){$('status').textContent=`レベル${save.level}・しんじゅ${save.pearls}・${steps}ほ`}
+function status(){$('status').textContent=`レベル${save.level}・しんじゅ${save.pearls}・${steps}ほ`;$('viewBtn').textContent=`${VIEW_SHORT[save.view]} ⇄`}
 let toastT=0;function toast(t,ms=1800){const el=$('toast');el.textContent=t;el.hidden=false;el.style.opacity=1;clearTimeout(toastT);
   toastT=setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.hidden=true,300)},ms)}
 
@@ -316,7 +319,7 @@ $('lvUp').addEventListener('click',()=>{save.level=Math.min(40,save.level+1);per
 for(const b of document.querySelectorAll('#fogOpts button'))b.addEventListener('click',()=>{save.fog=b.dataset.fog;persist();syncSettings()});
 for(const b of document.querySelectorAll('#trapOpts button'))b.addEventListener('click',()=>{save.traps=+b.dataset.trap;persist();syncSettings()});
 for(const b of document.querySelectorAll('#sndOpts button'))b.addEventListener('click',()=>{save.sound=+b.dataset.snd;persist();syncSettings()});
-function syncSettings(){$('lvShow').textContent=save.level;status();$('viewBtn').textContent=`${VIEW_SHORT[save.view]} ⇄`;$('fogBtn').classList.toggle('off',save.fog==='none');
+function syncSettings(){$('lvShow').textContent=save.level;status();$('fogBtn').classList.toggle('off',save.fog==='none');
   for(const b of document.querySelectorAll('#viewOpts button'))b.classList.toggle('on',b.dataset.view===save.view);
   for(const b of document.querySelectorAll('#fogOpts button'))b.classList.toggle('on',b.dataset.fog===save.fog);
   for(const b of document.querySelectorAll('#trapOpts button'))b.classList.toggle('on',+b.dataset.trap===save.traps);
@@ -392,10 +395,18 @@ function drawSide(t){const R=maze.R,C=maze.C,th=Math.max(5,cell*.13),rock='#6d7f
   for(let f=0;f<R;f++){const y=oy+(f+1)*cell;for(let c=0;c<C;c++){const s=f<R-1?maze.v[f][c]:0,x0=ox+c*cell,x1=x0+cell;
     if(s===0){ctx.moveTo(x0,y);ctx.lineTo(x1,y)}else if(s!==4){ctx.moveTo(x0,y);ctx.lineTo(x0+cell*.27,y);ctx.moveTo(x1-cell*.27,y);ctx.lineTo(x1,y)}}}
   ctx.stroke();
-  // holes: black ovals in the floor (a forced hole swallows the whole cell floor)
-  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++){const s=maze.v[f][c];if(s!==2&&s!==4)continue;const x=cx(c),y=oy+(f+1)*cell,hr=s===4?cell*.46:cell*.26,hy=s===4?cell*.13:cell*.1;
+  // forced holes: black ovals that swallow the whole cell floor
+  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===4){const x=cx(c),y=oy+(f+1)*cell,hr=cell*.46,hy=cell*.13;
     ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,0,7);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,Math.PI,2*Math.PI);ctx.stroke()}
+  // optional holes: a coral trap door set into the floor, hinged on the left
+  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===2){const x=cx(c),y=oy+(f+1)*cell,w=cell*.5,h=th*1.15;
+    ctx.fillStyle='#0a1a2c';ctx.fillRect(x-w/2,y-h/2,w,h+2);                       // the dark gap behind the door
+    ctx.fillStyle='#ff8a7a';ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,h*.35);ctx.fill();
+    ctx.fillStyle='#ffb3a7';for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(x-w/2+w*(i+.5)/5,y-h/2,w*.045,0,7);ctx.fill()}  // knobbly coral top
+    ctx.strokeStyle='#b84a3c';ctx.lineWidth=Math.max(1.2,cell*.02);ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,h*.35);ctx.stroke();
+    ctx.fillStyle='#6b2a22';ctx.beginPath();ctx.arc(x-w/2+w*.09,y,h*.22,0,7);ctx.fill();                                // hinge
+    ctx.fillStyle='#fff1d6';ctx.beginPath();ctx.arc(x+w/2-w*.14,y,h*.17,0,7);ctx.fill()}                               // ring handle
   // vents: a hot spring on the floor of the cell below the gap, bubbling up through it
   for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===5){const x=cx(c),y=oy+(f+2)*cell,top=oy+(f+1)*cell;
     const g=ctx.createLinearGradient(x,top-cell*.2,x,y);g.addColorStop(0,'rgba(255,150,60,0)');g.addColorStop(1,'rgba(255,150,60,.35)');
