@@ -399,14 +399,14 @@ function drawSide(t){const R=maze.R,C=maze.C,th=Math.max(5,cell*.13),rock='#6d7f
   for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===4){const x=cx(c),y=oy+(f+1)*cell,hr=cell*.46,hy=cell*.13;
     ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,0,7);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,Math.PI,2*Math.PI);ctx.stroke()}
-  // optional holes: a coral trap door set into the floor, hinged on the left
-  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===2){const x=cx(c),y=oy+(f+1)*cell,w=cell*.5,h=th*1.15;
-    ctx.fillStyle='#0a1a2c';ctx.fillRect(x-w/2,y-h/2,w,h+2);                       // the dark gap behind the door
-    ctx.fillStyle='#ff8a7a';ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,h*.35);ctx.fill();
-    ctx.fillStyle='#ffb3a7';for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(x-w/2+w*(i+.5)/5,y-h/2,w*.045,0,7);ctx.fill()}  // knobbly coral top
-    ctx.strokeStyle='#b84a3c';ctx.lineWidth=Math.max(1.2,cell*.02);ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,h*.35);ctx.stroke();
-    ctx.fillStyle='#6b2a22';ctx.beginPath();ctx.arc(x-w/2+w*.09,y,h*.22,0,7);ctx.fill();                                // hinge
-    ctx.fillStyle='#fff1d6';ctx.beginPath();ctx.arc(x+w/2-w*.14,y,h*.17,0,7);ctx.fill()}                               // ring handle
+  // optional holes: a gap in the floor hidden under swaying seaweed
+  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===2){const x=cx(c),y=oy+(f+1)*cell,w=cell*.46;
+    ctx.fillStyle='#04101f';ctx.beginPath();ctx.ellipse(x,y,w/2,th*.6,0,0,7);ctx.fill();   // the hole
+    ctx.lineCap='round';ctx.lineWidth=Math.max(2,cell*.045);
+    const fronds=[[-.5,1,'#3f9d5a',.9],[-.3,1,'#6cc27a',.7],[-.1,1,'#2f7f4a',1],[.1,-1,'#3f9d5a',.95],[.3,-1,'#6cc27a',.7],[.5,-1,'#2f7f4a',.85]];
+    fronds.forEach(([u,dir,col,len],i)=>{const x0=x+u*w*.9,sw=Math.sin(t/900+i*1.3+c)*cell*.05,h=cell*len*.28;
+      ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(x0,y+th*.3);
+      ctx.bezierCurveTo(x0+dir*w*.1,y-h*.45,x0+dir*w*.35+sw,y-h*.6,x0+dir*w*.3+sw*1.5,y-h);ctx.stroke()})}
   // vents: a hot spring on the floor of the cell below the gap, bubbling up through it
   for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===5){const x=cx(c),y=oy+(f+2)*cell,top=oy+(f+1)*cell;
     const g=ctx.createLinearGradient(x,top-cell*.2,x,y);g.addColorStop(0,'rgba(255,150,60,0)');g.addColorStop(1,'rgba(255,150,60,.35)');
