@@ -15,6 +15,10 @@ The game draws each maze in one of two ways; the みかた ⇄ button at the top
 - **よこから** (from the side): rows are floors, up to eight of them, seen side-on.
   Rock pillars block the way along a floor, ladders join floors both ways, and black oval holes in the floor drop her one floor down with no way back up.
   She starts at the bottom left and climbs the tower to the pearl.
+- **よこから・あなに おちる** (from the side, falling holes): the same tower, but a hole swallows its whole cell.
+  She can't stand there or walk past it: stepping in drops her to the first solid floor below, through several floors if the holes line up.
+  Holes can open in otherwise solid floors, and a ladder never leads down into one.
+  This is a different class of maze: the holes cut floors into pieces as well as sending her down.
 - **うえから** (from above): a square grid seen from above, where one-way passages are currents of chevrons she can only swim along with.
 
 The view is zoomed in, with the camera following the octopus (from the side a whole floor's width is always shown, and the camera scrolls up the tower); when the maze doesn't fit on the screen a 🗺️ button toggles a view of the whole maze.
@@ -38,7 +42,7 @@ Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 10 to 14 tile
 - ⚙️ settings:
   - **くらさ** (darkness): あかるい shows the whole maze; ランタン (default) shows what's near the octopus and dimly remembers where she has been; まっくら shows only what's near and remembers nothing.
   - **いきどまり の わな** (dead-end traps): off by default. On, some regions can be entered but not left; a 🌀 whirlpool button then takes her back to the start.
-  - **みかた** (view): よこから (default) or うえから.
+  - **みかた** (view): よこから (default), よこから・あなに おちる, or うえから.
   - **レベル** to jump between levels, and あたらしい めいろ for a fresh maze at the same level.
 
 Progress (level, pearls found, settings) is saved in the browser on that device.
@@ -52,4 +56,5 @@ python3 maze_gen.py -n 12 --seed 1 --solution            # ASCII maze with the s
 python3 maze_gen.py -n 20 --fair --keep-all --svg maze.svg --json maze.json
 python3 maze_gen.py -n 10 --gravity                       # one-way edges never form a cycle (every cell gets a floor number)
 python3 maze_gen.py -n 12 --rows 8 --platform --fair --far-goal   # side view: 8 floors, ladders (H) and holes (o)
+python3 maze_gen.py -n 12 --rows 8 --platform --forced --fair --keep-all --far-goal   # holes (ooo) swallow the cell and force a drop
 ```

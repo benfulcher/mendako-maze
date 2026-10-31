@@ -34,6 +34,9 @@ Generation
      --far-goal put the goal at the cell with the longest shortest path from
                 the start (as the game does), instead of the far corner;
                 with --platform it stays in the top half of the tower
+     --forced   with --platform: a hole swallows its whole cell (ooo).  You
+                can't stand there or walk past it; stepping in drops you to
+                the first solid floor below.  Ladders never lead into a hole.
 
 Usage
 -----
@@ -58,11 +61,12 @@ def ekey(a, b):
 
 
 class Maze:
-    def __init__(self, rows, cols, start, goal):
+    def __init__(self, rows, cols, start, goal, forced=False):
         self.rows = rows
         self.cols = cols
         self.start = start
         self.goal = goal
+        self.forced = forced  # forced-drop class (see --forced)
         # Edge state: WALL, OPEN, or a tuple (u, v) meaning one-way u -> v.
         self.edges = {}
         for r in range(rows):
@@ -91,11 +95,33 @@ class Maze:
             return not oneway_only
         return st == (u, v)
 
+    def is_hole(self, u):
+        """Forced class: the cell has a hole in its floor, so you can't stand on it."""
+        r, c = u
+        return self.forced and r < self.rows - 1 and self.edges[ekey(u, (r + 1, c))] == (u, (r + 1, c))
+
+    def landing(self, u):
+        while self.is_hole(u):
+            u = (u[0] + 1, u[1])
+        return u
+
     def successors(self, u, oneway_only=False):
-        return [v for v in self.neighbours(u) if self.passable(u, v, oneway_only)]
+        if not self.forced:
+            return [v for v in self.neighbours(u) if self.passable(u, v, oneway_only)]
+        if self.is_hole(u):
+            return []
+        out = []
+        for v in self.neighbours(u):
+            if v[0] == u[0] and self.edges[ekey(u, v)] != WALL:
+                out.append(self.landing(v))        # walking into a hole cell drops you
+            elif v[0] != u[0] and self.edges[ekey(u, v)] == OPEN:
+                out.append(v)                      # ladder
+        return out
 
     def predecessors(self, u, oneway_only=False):
-        return [v for v in self.neighbours(u) if self.passable(v, u, oneway_only)]
+        if not self.forced:
+            return [v for v in self.neighbours(u) if self.passable(v, u, oneway_only)]
+        return [w for w in self.cells() if u in self.successors(w)]
 
     def bfs(self, src, step):
         """Map cell -> parent for every cell reachable from src via step()."""
@@ -113,7 +139,13 @@ class Maze:
         return set(self.bfs(self.start, self.successors))
 
     def can_reach_goal(self):
-        return set(self.bfs(self.goal, self.predecessors))
+        if not self.forced:
+            return set(self.bfs(self.goal, self.predecessors))
+        pred = {c: [] for c in self.cells()}
+        for w in self.cells():
+            for v in self.successors(w):
+                pred[v].append(w)
+        return set(self.bfs(self.goal, lambda u: pred[u]))
 
     def distances(self, src):
         """Shortest directed distance from src to every reachable cell."""
@@ -169,10 +201,13 @@ class Maze:
         return floors
 
     def is_valid(self, fair=False, gravity=False, keep_all=False):
+        if self.is_hole(self.goal):
+            return False
         reach = self.reachable_from_start()
         if self.goal not in reach:
             return False
-        if keep_all and len(reach) != len(self.cells()):
+        standable = [c for c in self.cells() if not self.is_hole(c)]
+        if keep_all and len(reach) != len(standable):
             return False
         if fair and not reach <= self.can_reach_goal():
             return False
@@ -214,7 +249,8 @@ def orient_edges(maze, rng, fraction, fair, gravity, keep_all, platform=False):
     keeps the maze valid it stays two-way.  In platform mode only vertical
     passages are tried, and only downward (holes).  Returns the number converted.
     """
-    passages = [e for e, s in maze.edges.items() if s == OPEN
+    # Forced holes may open a solid floor too, so walls are candidates as well.
+    passages = [e for e, s in maze.edges.items() if (s == OPEN or (maze.forced and s == WALL))
                 and not (platform and e[0][0] == e[1][0])]
     rng.shuffle(passages)
     target = round(fraction * len(passages))
@@ -223,24 +259,27 @@ def orient_edges(maze, rng, fraction, fair, gravity, keep_all, platform=False):
         if made >= target:
             break
         a, b = e  # a is above b (or left of b)
+        if maze.forced and a[0] > 0 and maze.edges[ekey((a[0] - 1, a[1]), a)] == OPEN:
+            continue  # a ladder would lead down into the hole cell
+        was = maze.edges[e]
         for direction in ([(a, b)] if platform else rng.sample([(a, b), (b, a)], 2)):
             maze.edges[e] = direction
             if maze.is_valid(fair, gravity, keep_all):
                 made += 1
                 break
         else:  # neither direction worked
-            maze.edges[e] = OPEN
+            maze.edges[e] = was
     return made, target
 
 
 def generate(n, seed=None, oneway=0.25, loops=None, fair=False, gravity=False,
              keep_all=False, start=None, goal=None, rows=None, platform=False,
-             far_goal=False):
+             far_goal=False, forced=False):
     """Build a maze; returns (maze, one-way edges made, one-way edges targeted)."""
     rng = random.Random(seed)
     rows = rows or n
     start = start or ((rows - 1, 0) if platform else (0, 0))
-    maze = Maze(rows, n, start, goal or (rows - 1, n - 1))
+    maze = Maze(rows, n, start, goal or (rows - 1, n - 1), forced=forced and platform)
     carve_tree(maze, rng)
     add_loops(maze, rng, max(rows, n) if loops is None else loops)
     if far_goal and goal is None:
@@ -286,7 +325,7 @@ def render_ascii(maze, path=None, platform=False):
             if st == OPEN:
                 mark = " H " if platform else "   "
             elif platform:
-                mark = " o "
+                mark = "ooo" if maze.forced else " o "
             else:
                 mark = " v " if st[1][0] > st[0][0] else " ^ "
             g[i][j:j + 3] = list(mark)
@@ -387,6 +426,8 @@ def main(argv=None):
     p.add_argument("--rows", type=int, help="rows, or floors with --platform (default: same as --size)")
     p.add_argument("--platform", action="store_true",
                    help="side view: floors joined by ladders (two-way) and holes (down only)")
+    p.add_argument("--forced", action="store_true",
+                   help="with --platform: holes swallow their cell and force a drop")
     p.add_argument("--far-goal", action="store_true",
                    help="put the goal at the cell farthest (by shortest path) from the start")
     p.add_argument("--seed", type=int, help="random seed for a reproducible maze")
@@ -413,7 +454,7 @@ def main(argv=None):
         args.size, seed=args.seed, oneway=args.oneway, loops=args.loops,
         fair=args.fair, gravity=args.gravity, keep_all=args.keep_all,
         start=args.start, goal=args.goal, rows=args.rows, platform=args.platform,
-        far_goal=args.far_goal)
+        far_goal=args.far_goal, forced=args.forced)
     path = maze.solution()
     floors = maze.oneway_floors() if args.gravity else None
 
@@ -422,7 +463,9 @@ def main(argv=None):
 
     n_pass = sum(1 for s in maze.edges.values() if s != WALL)
     n_one = sum(1 for s in maze.edges.values() if s not in (WALL, OPEN))
-    on_path = sum(1 for u, v in zip(path, path[1:]) if maze.edges[ekey(u, v)] == (u, v))
+    # a one-way step is a one-way edge, or (forced class) a drop that skips cells
+    on_path = sum(1 for u, v in zip(path, path[1:])
+                  if ekey(u, v) not in maze.edges or maze.edges[ekey(u, v)] == (u, v))
     reach = maze.reachable_from_start()
     traps = reach - maze.can_reach_goal()
     print(f"size {maze.rows}x{maze.cols}, seed {args.seed}", file=sys.stderr)

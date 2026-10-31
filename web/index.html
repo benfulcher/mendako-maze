@@ -85,6 +85,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
         <h2>せってい</h2>
         <div class="opt"><span>みかた</span><div class="row" id="viewOpts">
           <button data-view="side">よこから</button>
+          <button data-view="drop">よこから・あなに おちる</button>
           <button data-view="top">うえから</button></div></div>
         <div class="opt"><span>くらさ</span><div class="row" id="fogOpts">
           <button data-fog="none">あかるい</button>
@@ -129,6 +130,20 @@ class Maze{
     this.h=Array.from({length:R},()=>Array(C-1).fill(0));
     this.v=Array.from({length:R-1},()=>Array(C).fill(0))}
   inside(r,c){return r>=0&&c>=0&&r<this.R&&c<this.C}
+  // Forced-drop class: a cell with a hole in its floor can't be stood on; entering it
+  // drops you to the first solid floor below, and it blocks walking along the floor.
+  isHole(r,c){return this.forced&&r<this.R-1&&this.v[r][c]===2}
+  landing(r,c){while(this.isHole(r,c))r++;return[r,c]}
+  succ(r,c){const out=[];
+    if(!this.forced){for(let d=0;d<4;d++)if(this.canGo(r,c,d))out.push([r+DIRS[d][0],c+DIRS[d][1]]);return out}
+    if(this.isHole(r,c))return out;
+    for(const d of [1,3])if(this.canGo(r,c,d))out.push(this.landing(r,c+DIRS[d][1]));
+    if(r>0&&this.v[r-1][c]===1)out.push([r-1,c]);
+    if(r<this.R-1&&this.v[r][c]===1)out.push([r+1,c]);
+    return out}
+  adj(back){const n=this.C,A=Array.from({length:this.R*n},()=>[]);
+    for(let r=0;r<this.R;r++)for(let c=0;c<n;c++)for(const [nr,nc] of this.succ(r,c)){if(back)A[nr*n+nc].push([r,c]);else A[r*n+c].push([nr,nc])}
+    return A}
   cellsShuffled(rng){const a=[];for(let r=0;r<this.R;r++)for(let c=0;c<this.C;c++)a.push([r,c]);return shuffle(a,rng)}
   edge(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(!this.inside(nr,nc))return null;
     return DIRS[d][0]===0?{arr:this.h,i:r,j:Math.min(c,nc),fwd:nc>c}:{arr:this.v,i:Math.min(r,nr),j:c,fwd:nr>r}}
@@ -139,19 +154,16 @@ class Maze{
     return (s===2&&!e.fwd)||(s===3&&e.fwd)}
   canCome(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];return this.inside(nr,nc)&&this.canGo(nr,nc,(d+2)%4)}
   // Parent index per cell reached from src (forwards, or backwards along edges), -1 if unreached.
-  bfs(src,back){const n=this.C,par=new Int32Array(this.R*n).fill(-1),q=[src];par[src[0]*n+src[1]]=src[0]*n+src[1];
-    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi];for(let d=0;d<4;d++){
-      if(!(back?this.canCome(r,c,d):this.canGo(r,c,d)))continue;
-      const nr=r+DIRS[d][0],nc=c+DIRS[d][1],k=nr*n+nc;if(par[k]<0){par[k]=r*n+c;q.push([nr,nc])}}}
+  bfs(src,back){const n=this.C,A=this.adj(back),par=new Int32Array(this.R*n).fill(-1),q=[src];par[src[0]*n+src[1]]=src[0]*n+src[1];
+    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi];for(const [nr,nc] of A[r*n+c]){const k=nr*n+nc;if(par[k]<0){par[k]=r*n+c;q.push([nr,nc])}}}
     return par}
-  dist(src){const n=this.C,d=new Int32Array(this.R*n).fill(-1),q=[src];d[src[0]*n+src[1]]=0;
-    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi],k0=r*n+c;for(let dd=0;dd<4;dd++){if(!this.canGo(r,c,dd))continue;
-      const nr=r+DIRS[dd][0],nc=c+DIRS[dd][1],k=nr*n+nc;if(d[k]<0){d[k]=d[k0]+1;q.push([nr,nc])}}}
+  dist(src){const n=this.C,A=this.adj(false),d=new Int32Array(this.R*n).fill(-1),q=[src];d[src[0]*n+src[1]]=0;
+    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi],k0=r*n+c;for(const [nr,nc] of A[k0]){const k=nr*n+nc;if(d[k]<0){d[k]=d[k0]+1;q.push([nr,nc])}}}
     return d}
   pathFrom(src){const n=this.C,par=this.bfs(src,false),g=this.goal[0]*n+this.goal[1];if(par[g]<0)return null;
     const out=[];let k=g;for(;;){out.push([Math.floor(k/n),k%n]);if(k===src[0]*n+src[1])break;k=par[k]}return out.reverse()}
-  valid(o){const n=this.C,fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
-    if(o.keepAll&&fw.includes(-1))return false;
+  valid(o){const n=this.C;if(this.isHole(...this.goal))return false;const fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
+    if(o.keepAll){for(let r=0;r<this.R;r++)for(let c=0;c<n;c++)if(fw[r*n+c]<0&&!this.isHole(r,c))return false}
     if(o.fair){const bk=this.bfs(this.goal,true);for(let k=0;k<fw.length;k++)if(fw[k]>=0&&bk[k]<0)return false}
     return true}
 }
@@ -159,7 +171,7 @@ function generate(R,C,rng,o){
   // Start top-left from above, bottom-left from the side (climb the tower).  The pearl
   // goes at the cell with the longest shortest path from the start.
   const start=o.platform?[R-1,0]:[0,0];
-  const m=new Maze(R,C,start,[R-1,C-1]);
+  const m=new Maze(R,C,start,[R-1,C-1]);m.forced=!!o.forced;
   // From the side the pearl stays in the top half of the tower, so she always climbs for it.
   const farthest=()=>{const d=m.dist(start),cells=m.cellsShuffled(rng).filter(([r,c])=>d[r*C+c]>=0&&(!o.platform||r<Math.ceil(R/2)));
     cells.sort((a,b)=>d[b[0]*C+b[1]]-d[a[0]*C+a[1]]);return cells};
@@ -178,12 +190,13 @@ function generate(R,C,rng,o){
   // 3. one-way passages, each kept only if the maze stays valid.
   //    Platform mode: only vertical edges, and only downward (holes in the floor).
   const open=[];if(!o.platform)for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
-  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1)open.push([m.v,r,c]);
+  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1||o.forced)open.push([m.v,r,c]);  // forced holes can open a solid floor too
   m.goal=farthest()[0];  // provisional goal before any one-way edges
   shuffle(open,rng);const target=Math.round(o.oneway*open.length);let made=0;
-  for(const [a,i,j] of open){if(made>=target)break;const first=rng()<.5?2:3;let ok=false;
+  for(const [a,i,j] of open){if(made>=target)break;const first=rng()<.5?2:3;let ok=false;const was=a[i][j];
+    if(o.forced&&i>0&&m.v[i-1][j]===1)continue;  // never a ladder leading down into a hole cell
     for(const s of (o.platform?[2]:[first,5-first])){a[i][j]=s;if(m.valid(o)){ok=true;break}}
-    if(ok)made++;else a[i][j]=1}
+    if(ok)made++;else a[i][j]=was}
   // Final goal: the farthest cell for which the maze is still valid (the provisional one always is).
   for(const g of farthest()){m.goal=g;if(m.valid(o))break}
   return m;
@@ -209,14 +222,14 @@ const SFX=(()=>{let ac=null;const on=()=>save.sound;
 const SAVE='mendako-maze';
 let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1,view:'side'};
 try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE)||'{}'))}catch(e){}
-if(save.view!=='top')save.view='side';
+if(!['top','drop'].includes(save.view))save.view='side';
 function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){}}
 
 let curView='side',mapMode=false,fits=true;
-const side=()=>curView==='side';
+const side=()=>curView!=='top',forced=()=>curView==='drop';
 function params(L){
   if(side()){const R=Math.min(3+Math.ceil(L/2),8),C=Math.min(10+Math.floor(L/3),14);
-    return{R,C,oneway:Math.min(.3+.05*L,.7),loops:Math.round((R+C)/2),fair:!save.traps,keepAll:true,platform:true}}
+    return{R,C,oneway:forced()?Math.min(.18+.03*L,.4):Math.min(.3+.05*L,.7),loops:Math.round((R+C)/2),fair:!save.traps,keepAll:true,platform:true,forced:forced()}}
   const n=Math.min(4+Math.ceil(L/2),12);
   return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
 
@@ -241,6 +254,7 @@ function tryMove(d){if(won||anim||swirl)return;SFX.unlock();const {r,c}=pl;
   else{const cur=maze.isCurrentAgainst(r,c,d);bump={d,t0:performance.now(),cur};
     if(cur){if(side()){SFX.bump();toast('あなは のぼれないよ！',1200)}else{SFX.push();toast('ながれが つよくて すすめない！',1200)}}else SFX.bump()}}
 function arrived(){pl={r:anim.to[0],c:anim.to[1]};anim=null;reveal();
+  if(maze.isHole(pl.r,pl.c)){anim={from:[pl.r,pl.c],to:[pl.r+1,pl.c],t0:performance.now(),dur:300,kind:'fall'};SFX.fall();return}
   if(pl.r===maze.goal[0]&&pl.c===maze.goal[1]){won=true;save.pearls++;persist();SFX.pearl();
     $('winText').textContent=`しんじゅを みつけた！ ${steps} ほ で ついたよ。`;setTimeout(()=>$('win').hidden=false,900);return}
   const trapped=canReachGoal[pl.r*maze.C+pl.c]<0;$('rescue').hidden=!trapped;
@@ -259,8 +273,9 @@ for(const b of document.querySelectorAll('#pad [data-d]')){
   b.addEventListener('pointerdown',e=>{e.preventDefault();const d=+b.dataset.d;tryMove(d);clearInterval(holdT);holdT=setInterval(()=>tryMove(d),170)});
   for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
 $('hint').addEventListener('click',hint);
-$('viewBtn').addEventListener('click',e=>{save.view=side()?'top':'side';persist();syncSettings();
-  newMaze();toast(save.view==='side'?'よこから みる：ゆかと はしご':'うえから みる：ながれ',1600);e.currentTarget.blur()});$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
+const VIEW_NAMES={side:'よこから：はしごと あな',drop:'よこから：あなに おちる！',top:'うえから：ながれ'};
+$('viewBtn').addEventListener('click',e=>{save.view={side:'drop',drop:'top',top:'side'}[save.view];persist();syncSettings();
+  newMaze();toast(VIEW_NAMES[save.view],1600);e.currentTarget.blur()});$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
 for(const b of document.querySelectorAll('#viewOpts button'))b.addEventListener('click',()=>{if(save.view===b.dataset.view)return;save.view=b.dataset.view;persist();syncSettings();newMaze()});$('rescue').addEventListener('click',rescue);
 const cv=$('cv');let sw=null;
 cv.addEventListener('pointerdown',e=>{sw={x:e.clientX,y:e.clientY};SFX.unlock()});
@@ -350,12 +365,13 @@ function drawSide(t){const R=maze.R,C=maze.C,th=Math.max(5,cell*.13),rock='#6d7f
   // platforms, with a gap where there is a ladder or a hole
   ctx.strokeStyle=sand;ctx.lineWidth=th;ctx.lineCap='butt';ctx.beginPath();
   for(let f=0;f<R;f++){const y=oy+(f+1)*cell;for(let c=0;c<C;c++){const s=f<R-1?maze.v[f][c]:0,x0=ox+c*cell,x1=x0+cell;
-    if(s===0){ctx.moveTo(x0,y);ctx.lineTo(x1,y)}else{ctx.moveTo(x0,y);ctx.lineTo(x0+cell*.27,y);ctx.moveTo(x1-cell*.27,y);ctx.lineTo(x1,y)}}}
+    if(s===0){ctx.moveTo(x0,y);ctx.lineTo(x1,y)}else if(!(s===2&&maze.forced)){ctx.moveTo(x0,y);ctx.lineTo(x0+cell*.27,y);ctx.moveTo(x1-cell*.27,y);ctx.lineTo(x1,y)}}}
   ctx.stroke();
   // holes: black ovals in the floor
+  const hr=maze.forced?cell*.46:cell*.26,hy=maze.forced?cell*.13:cell*.1;
   for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===2){const x=cx(c),y=oy+(f+1)*cell;
-    ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(x,y,cell*.26,cell*.1,0,0,7);ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,cell*.26,cell*.1,0,Math.PI,2*Math.PI);ctx.stroke()}
+    ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,hr,hy,0,Math.PI,2*Math.PI);ctx.stroke()}
   // outer rock
   ctx.strokeStyle=rock;ctx.lineWidth=th*1.3;ctx.strokeRect(ox,oy,cell*C,cell*R);
   // floor numbers
