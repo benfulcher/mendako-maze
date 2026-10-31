@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="メンダコの めいろ">
+<meta name="theme-color" content="#04101f">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<title>メンダコの めいろ</title>
+<style>
+:root{--bg:#04101f;--ink:#e9f3ff;--btn:#1b3a5c;--btn2:#0c2238;--gold:#ffd97a}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;touch-action:manipulation}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;
+  padding:max(6px,env(safe-area-inset-top)) 8px max(6px,env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 6px;
+  font-size:clamp(15px,2.4vmin,22px);line-height:1.3}
+header h1{font-size:1.1em;margin:0;font-weight:700}
+header span{opacity:.9}
+#stage{flex:1;position:relative;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#pad{display:grid;grid-template-columns:repeat(3,min(72px,20vw));grid-template-rows:repeat(2,min(60px,10vh));
+  gap:8px;justify-content:center;padding:8px 0 2px}
+#pad button{font-size:clamp(22px,4vmin,30px);border-radius:16px;background:var(--btn);
+  box-shadow:0 5px 0 var(--btn2)}
+#pad button:active{transform:translateY(4px);box-shadow:none}
+#pad .small{font-size:clamp(18px,3vmin,24px);background:#163049}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(2,8,18,.72);z-index:5}
+.card{background:#0e2a44;border-radius:24px;padding:22px 26px;text-align:center;max-width:min(92vw,460px);
+  box-shadow:0 12px 40px rgba(0,0,0,.5);font-size:clamp(17px,2.8vmin,24px)}
+.card h2{margin:0 0 10px;font-size:1.5em;color:var(--gold)}
+.card p{margin:8px 0}
+.card .row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+.card button{background:var(--btn);border-radius:14px;padding:10px 18px;box-shadow:0 4px 0 var(--btn2)}
+.card button.on{background:#2a7fb8;box-shadow:0 4px 0 #17537a}
+.card button:active{transform:translateY(3px);box-shadow:none}
+.card .opt{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+.card .opt .row{margin:0}
+.card .opt button{padding:6px 12px;font-size:.9em}
+#toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(14,42,68,.92);
+  border-radius:14px;padding:8px 16px;font-size:clamp(16px,2.6vmin,22px);z-index:4;
+  transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#rescue{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#2a7fb8;
+  border-radius:16px;padding:10px 18px;font-size:clamp(17px,2.8vmin,24px);box-shadow:0 4px 0 #17537a;z-index:4}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>メンダコの めいろ</h1>
+    <span id="status"></span>
+  </header>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="toast" hidden></div>
+    <button id="rescue" hidden>🌀 うずしおで スタートに もどる</button>
+    <div id="win" class="overlay" hidden>
+      <div class="card">
+        <h2>やったー！</h2>
+        <p id="winText"></p>
+        <div class="row"><button id="next">つぎの めいろ ▶</button></div>
+      </div>
+    </div>
+    <div id="settings" class="overlay" hidden>
+      <div class="card">
+        <h2>せってい</h2>
+        <div class="opt"><span>くらさ</span><div class="row" id="fogOpts">
+          <button data-fog="none">あかるい</button>
+          <button data-fog="lantern">ランタン</button>
+          <button data-fog="dark">まっくら</button></div></div>
+        <div class="opt"><span>いきどまり の わな</span><div class="row" id="trapOpts">
+          <button data-trap="0">なし</button>
+          <button data-trap="1">あり</button></div></div>
+        <div class="opt"><span>レベル</span><div class="row">
+          <button id="lvDown">−</button><b id="lvShow"></b><button id="lvUp">＋</button></div></div>
+        <div class="opt"><span>おと</span><div class="row" id="sndOpts">
+          <button data-snd="1">オン</button><button data-snd="0">オフ</button></div></div>
+        <div class="row"><button id="newMaze">あたらしい めいろ</button><button id="closeSet">とじる</button></div>
+      </div>
+    </div>
+  </div>
+  <div id="pad">
+    <button id="hint" class="small" title="ヒント">💡</button>
+    <button data-d="0">▲</button>
+    <button id="gear" class="small" title="せってい">⚙️</button>
+    <button data-d="3">◀</button>
+    <button data-d="2">▼</button>
+    <button data-d="1">▶</button>
+  </div>
+</div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+
+// ---------------------------------------------------------------- random
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function shuffle(a,rng){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+// ---------------------------------------------------------------- maze
+// Cells are nodes of a directed graph.  h[r][c] is the edge between (r,c) and (r,c+1);
+// v[r][c] the edge between (r,c) and (r+1,c).  Edge state:
+//   0 wall (rock)   1 two-way passage   2 one-way toward +index (right/down)   3 one-way toward -index
+const DIRS=[[-1,0],[0,1],[1,0],[0,-1]]; // up right down left
+class Maze{
+  constructor(n,start,goal){this.n=n;this.start=start;this.goal=goal;
+    this.h=Array.from({length:n},()=>Array(n-1).fill(0));
+    this.v=Array.from({length:n-1},()=>Array(n).fill(0))}
+  inside(r,c){return r>=0&&c>=0&&r<this.n&&c<this.n}
+  edge(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(!this.inside(nr,nc))return null;
+    return DIRS[d][0]===0?{arr:this.h,i:r,j:Math.min(c,nc),fwd:nc>c}:{arr:this.v,i:Math.min(r,nr),j:c,fwd:nr>r}}
+  state(r,c,d){const e=this.edge(r,c,d);return e?e.arr[e.i][e.j]:0}
+  canGo(r,c,d){const e=this.edge(r,c,d);if(!e)return false;const s=e.arr[e.i][e.j];
+    return s===1||(s===2&&e.fwd)||(s===3&&!e.fwd)}
+  isCurrentAgainst(r,c,d){const e=this.edge(r,c,d);if(!e)return false;const s=e.arr[e.i][e.j];
+    return (s===2&&!e.fwd)||(s===3&&e.fwd)}
+  canCome(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];return this.inside(nr,nc)&&this.canGo(nr,nc,(d+2)%4)}
+  // Parent index per cell reached from src (forwards, or backwards along edges), -1 if unreached.
+  bfs(src,back){const n=this.n,par=new Int32Array(n*n).fill(-1),q=[src];par[src[0]*n+src[1]]=src[0]*n+src[1];
+    for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi];for(let d=0;d<4;d++){
+      if(!(back?this.canCome(r,c,d):this.canGo(r,c,d)))continue;
+      const nr=r+DIRS[d][0],nc=c+DIRS[d][1],k=nr*n+nc;if(par[k]<0){par[k]=r*n+c;q.push([nr,nc])}}}
+    return par}
+  pathFrom(src){const n=this.n,par=this.bfs(src,false),g=this.goal[0]*n+this.goal[1];if(par[g]<0)return null;
+    const out=[];let k=g;for(;;){out.push([Math.floor(k/n),k%n]);if(k===src[0]*n+src[1])break;k=par[k]}return out.reverse()}
+  valid(o){const n=this.n,fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
+    if(o.keepAll&&fw.includes(-1))return false;
+    if(o.fair){const bk=this.bfs(this.goal,true);for(let k=0;k<n*n;k++)if(fw[k]>=0&&bk[k]<0)return false}
+    return true}
+}
+function generate(n,rng,o){
+  const m=new Maze(n,[0,0],[n-1,n-1]);
+  // 1. spanning tree of two-way passages (recursive backtracker)
+  const seen=Array.from({length:n},()=>Array(n).fill(false));
+  const r0=Math.floor(rng()*n),c0=Math.floor(rng()*n);seen[r0][c0]=true;const st=[[r0,c0]];
+  while(st.length){const [r,c]=st[st.length-1],opt=[];
+    for(let d=0;d<4;d++){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(m.inside(nr,nc)&&!seen[nr][nc])opt.push(d)}
+    if(!opt.length){st.pop();continue}
+    const d=opt[Math.floor(rng()*opt.length)],e=m.edge(r,c,d);e.arr[e.i][e.j]=1;
+    const nr=r+DIRS[d][0],nc=c+DIRS[d][1];seen[nr][nc]=true;st.push([nr,nc])}
+  // 2. extra openings, so there are loops
+  const walls=[];for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(!m.h[r][c])walls.push([m.h,r,c]);
+  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(!m.v[r][c])walls.push([m.v,r,c]);
+  shuffle(walls,rng);for(const [a,i,j] of walls.slice(0,o.loops))a[i][j]=1;
+  // 3. one-way currents, each kept only if the maze stays valid
+  const open=[];for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
+  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(m.v[r][c]===1)open.push([m.v,r,c]);
+  shuffle(open,rng);const target=Math.round(o.oneway*open.length);let made=0;
+  for(const [a,i,j] of open){if(made>=target)break;const first=rng()<.5?2:3;let ok=false;
+    for(const s of [first,5-first]){a[i][j]=s;if(m.valid(o)){ok=true;break}}
+    if(ok)made++;else a[i][j]=1}
+  return m;
+}
+
+// ---------------------------------------------------------------- sound
+const SFX=(()=>{let ac=null;const on=()=>save.sound;
+  function ctx(){if(!ac){const C=window.AudioContext||window.webkitAudioContext;if(C)ac=new C()}if(ac&&ac.state==='suspended')ac.resume();return ac}
+  function tone(f,t,dur,type='sine',vol=.15,slide=0){const a=ctx();if(!a||!on())return;const o=a.createOscillator(),g=a.createGain();
+    o.type=type;o.frequency.setValueAtTime(f,a.currentTime+t);if(slide)o.frequency.exponentialRampToValueAtTime(slide,a.currentTime+t+dur);
+    g.gain.setValueAtTime(0,a.currentTime+t);g.gain.linearRampToValueAtTime(vol,a.currentTime+t+.01);
+    g.gain.exponentialRampToValueAtTime(.001,a.currentTime+t+dur);o.connect(g).connect(a.destination);o.start(a.currentTime+t);o.stop(a.currentTime+t+dur+.05)}
+  return{unlock:()=>ctx(),
+    step:()=>tone(520+Math.random()*80,0,.07,'triangle',.08),
+    bump:()=>tone(140,0,.12,'square',.08,90),
+    push:()=>{tone(300,0,.25,'sawtooth',.05,120);tone(900,0,.2,'sine',.04,400)},
+    pearl:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.11,.35,'triangle',.12)),
+    swirl:()=>tone(200,0,.7,'sine',.1,900),
+    hint:()=>tone(880,0,.15,'sine',.08)}})();
+
+// ---------------------------------------------------------------- state
+const SAVE='mendako-maze';
+let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1};
+try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE)||'{}'))}catch(e){}
+function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){}}
+
+function params(L){const n=Math.min(4+Math.ceil(L/2),12);
+  return{n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true}}
+
+let maze,pl,steps,won,anim=null,bump=null,seenCells,canReachGoal,hintCells=[],hintUntil=0,facing=1,swirl=0;
+function newMaze(){
+  const p=params(save.level),rng=mulberry32((Date.now()^(Math.random()*1e9))>>>0);
+  maze=generate(p.n,rng,p);
+  pl={r:0,c:0};steps=0;won=false;anim=null;bump=null;hintCells=[];facing=1;
+  seenCells=new Set();canReachGoal=maze.bfs(maze.goal,true);
+  reveal();$('win').hidden=true;$('rescue').hidden=true;status();if(W)layout()}
+function reveal(){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=pl.r+dr,c=pl.c+dc;if(maze.inside(r,c))seenCells.add(r*maze.n+c)}}
+function status(){$('status').textContent=`レベル${save.level}・しんじゅ${save.pearls}・${steps}ほ`}
+let toastT=0;function toast(t,ms=1800){const el=$('toast');el.textContent=t;el.hidden=false;el.style.opacity=1;clearTimeout(toastT);
+  toastT=setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.hidden=true,300)},ms)}
+
+function tryMove(d){if(won||anim||swirl)return;SFX.unlock();const {r,c}=pl;
+  if(d===1)facing=1;if(d===3)facing=-1;
+  if(maze.canGo(r,c,d)){anim={from:[r,c],to:[r+DIRS[d][0],c+DIRS[d][1]],t0:performance.now(),dur:150};steps++;status();SFX.step()}
+  else{const cur=maze.isCurrentAgainst(r,c,d);bump={d,t0:performance.now(),cur};if(cur){SFX.push();toast('ながれが つよくて すすめない！',1200)}else SFX.bump()}}
+function arrived(){pl={r:anim.to[0],c:anim.to[1]};anim=null;reveal();
+  if(pl.r===maze.goal[0]&&pl.c===maze.goal[1]){won=true;save.pearls++;persist();SFX.pearl();
+    $('winText').textContent=`しんじゅを みつけた！ ${steps} ほ で ついたよ。`;setTimeout(()=>$('win').hidden=false,900);return}
+  const trapped=canReachGoal[pl.r*maze.n+pl.c]<0;$('rescue').hidden=!trapped;
+  if(trapped)toast('いきどまり！ もう もどれない…',2200)}
+function rescue(){if(swirl)return;SFX.swirl();swirl=performance.now();$('rescue').hidden=true;
+  setTimeout(()=>{pl={r:maze.start[0],c:maze.start[1]};reveal();swirl=0;toast('スタートに もどったよ')},700)}
+function hint(){if(won||anim)return;SFX.unlock();const p=maze.pathFrom([pl.r,pl.c]);
+  if(!p){toast('ここからは いけない… 🌀 で もどろう');return}
+  hintCells=p.slice(1,5);hintUntil=performance.now()+2500;SFX.hint()}
+
+// ---------------------------------------------------------------- input
+document.addEventListener('keydown',e=>{const k={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3}[e.key];
+  if(k!==undefined){e.preventDefault();tryMove(k)}});
+let holdT=null;
+for(const b of document.querySelectorAll('#pad [data-d]')){
+  b.addEventListener('pointerdown',e=>{e.preventDefault();const d=+b.dataset.d;tryMove(d);clearInterval(holdT);holdT=setInterval(()=>tryMove(d),170)});
+  for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
+$('hint').addEventListener('click',hint);$('rescue').addEventListener('click',rescue);
+const cv=$('cv');let sw=null;
+cv.addEventListener('pointerdown',e=>{sw={x:e.clientX,y:e.clientY};SFX.unlock()});
+cv.addEventListener('pointerup',e=>{if(!sw)return;const dx=e.clientX-sw.x,dy=e.clientY-sw.y;sw=null;
+  if(Math.hypot(dx,dy)<24)return;tryMove(Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0))});
+cv.addEventListener('pointercancel',()=>sw=null);
+$('next').addEventListener('click',()=>{save.level++;persist();newMaze()});
+$('gear').addEventListener('click',()=>{syncSettings();$('settings').hidden=false});
+$('closeSet').addEventListener('click',()=>$('settings').hidden=true);
+$('newMaze').addEventListener('click',()=>{$('settings').hidden=true;newMaze()});
+$('lvDown').addEventListener('click',()=>{save.level=Math.max(1,save.level-1);persist();syncSettings()});
+$('lvUp').addEventListener('click',()=>{save.level=Math.min(40,save.level+1);persist();syncSettings()});
+for(const b of document.querySelectorAll('#fogOpts button'))b.addEventListener('click',()=>{save.fog=b.dataset.fog;persist();syncSettings()});
+for(const b of document.querySelectorAll('#trapOpts button'))b.addEventListener('click',()=>{save.traps=+b.dataset.trap;persist();syncSettings()});
+for(const b of document.querySelectorAll('#sndOpts button'))b.addEventListener('click',()=>{save.sound=+b.dataset.snd;persist();syncSettings()});
+function syncSettings(){$('lvShow').textContent=save.level;status();
+  for(const b of document.querySelectorAll('#fogOpts button'))b.classList.toggle('on',b.dataset.fog===save.fog);
+  for(const b of document.querySelectorAll('#trapOpts button'))b.classList.toggle('on',+b.dataset.trap===save.traps);
+  for(const b of document.querySelectorAll('#sndOpts button'))b.classList.toggle('on',+b.dataset.snd===save.sound)}
+
+// ---------------------------------------------------------------- drawing
+const ctx=cv.getContext('2d'),fogc=document.createElement('canvas'),fctx=fogc.getContext('2d');
+let W=0,H=0,dpr=1,cell=0,ox=0,oy=0;
+function layout(){const st=$('stage');W=st.clientWidth;H=st.clientHeight;dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.width=fogc.width=Math.round(W*dpr);cv.height=fogc.height=Math.round(H*dpr);
+  const n=maze.n;cell=Math.floor(Math.min(W,H)*.95/n);ox=(W-cell*n)/2;oy=(H-cell*n)/2}
+window.addEventListener('resize',layout);
+const snow=Array.from({length:60},()=>({x:Math.random(),y:Math.random(),s:Math.random()*2+1,v:Math.random()*.02+.01}));
+const cx=c=>ox+c*cell+cell/2,cy=r=>oy+r*cell+cell/2;
+
+function drawMaze(t){const n=maze.n,wall=Math.max(4,cell*.11);
+  // floor
+  ctx.fillStyle='#0d2c4a';ctx.fillRect(ox,oy,cell*n,cell*n);
+  ctx.fillStyle='rgba(255,255,255,.03)';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if((r+c)&1)ctx.fillRect(ox+c*cell,oy+r*cell,cell,cell);
+  // currents (one-way passages)
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)for(const d of [1,2]){const s=maze.state(r,c,d);if(s<2)continue;
+    const fwd=s===2;const nr=r+DIRS[d][0],nc=c+DIRS[d][1];
+    const mx=(cx(c)+cx(nc))/2,my=(cy(r)+cy(nr))/2;const ddr=fwd?DIRS[d][0]:-DIRS[d][0],ddc=fwd?DIRS[d][1]:-DIRS[d][1];
+    ctx.save();ctx.translate(mx,my);ctx.rotate(Math.atan2(ddr,ddc));
+    const g=ctx.createLinearGradient(-cell*.5,0,cell*.5,0);g.addColorStop(0,'rgba(90,200,255,0)');g.addColorStop(.5,'rgba(90,200,255,.28)');g.addColorStop(1,'rgba(90,200,255,0)');
+    ctx.fillStyle=g;ctx.fillRect(-cell*.5,-cell*.36,cell,cell*.72);
+    const sp=cell*.3,off=((t/450)%1)*sp;ctx.strokeStyle='rgba(170,235,255,.95)';ctx.lineWidth=Math.max(2,cell*.07);ctx.lineCap='round';ctx.lineJoin='round';
+    for(let k=-1;k<=1;k++){const x=k*sp+off-sp/2;const a=1-Math.abs(x)/(cell*.55);if(a<=0)continue;ctx.globalAlpha=Math.max(0,a);
+      ctx.beginPath();ctx.moveTo(x-cell*.1,-cell*.16);ctx.lineTo(x+cell*.04,0);ctx.lineTo(x-cell*.1,cell*.16);ctx.stroke()}
+    ctx.restore()}
+  // walls
+  ctx.strokeStyle='#7f8fa6';ctx.lineWidth=wall;ctx.lineCap='round';ctx.beginPath();
+  for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(!maze.h[r][c]){const x=ox+(c+1)*cell;ctx.moveTo(x,oy+r*cell);ctx.lineTo(x,oy+(r+1)*cell)}
+  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(!maze.v[r][c]){const y=oy+(r+1)*cell;ctx.moveTo(ox+c*cell,y);ctx.lineTo(ox+(c+1)*cell,y)}
+  ctx.stroke();ctx.strokeStyle='#9aa9bd';ctx.lineWidth=wall*1.3;ctx.strokeRect(ox,oy,cell*n,cell*n);
+  // goal: a pearl in a clam
+  const gx=cx(maze.goal[1]),gy=cy(maze.goal[0]),pr=cell*.2,bob=Math.sin(t/600)*cell*.02;
+  ctx.save();ctx.translate(gx,gy+cell*.08);
+  ctx.fillStyle='#c98f5a';ctx.beginPath();ctx.ellipse(0,cell*.12,cell*.33,cell*.16,0,0,Math.PI);ctx.fill();
+  ctx.fillStyle='#e7b98a';ctx.beginPath();ctx.ellipse(0,-cell*.02,cell*.33,cell*.2,0,Math.PI,2*Math.PI);ctx.fill();
+  ctx.fillStyle='#b07a4c';ctx.beginPath();ctx.ellipse(0,-cell*.02,cell*.3,cell*.1,0,Math.PI,2*Math.PI);ctx.fill();
+  ctx.shadowColor='#fff6d5';ctx.shadowBlur=cell*.35;const pg=ctx.createRadialGradient(-pr*.3,-pr*.3-bob,pr*.1,0,-bob,pr);
+  pg.addColorStop(0,'#ffffff');pg.addColorStop(1,'#d9d2ff');ctx.fillStyle=pg;ctx.beginPath();ctx.arc(0,-pr*.1+bob,pr,0,7);ctx.fill();ctx.restore();
+}
+function drawMendako(x,y,t,sx){const s=cell/100;ctx.save();ctx.translate(x,y+Math.sin(t/500)*cell*.03);ctx.scale(s*sx*.8,s*.8);
+  const bob=Math.sin(t/500);
+  // arms (skirt)
+  ctx.fillStyle='#d86a86';ctx.beginPath();ctx.moveTo(-36,22);
+  for(let i=0;i<8;i++){const x0=-36+i*9,x1=x0+9;ctx.quadraticCurveTo(x0+4.5,36+Math.sin(t/300+i)*3,x1,22)}ctx.lineTo(36,22);ctx.closePath();ctx.fill();
+  // fins (the "ears")
+  ctx.fillStyle='#e98aa3';for(const k of [-1,1]){ctx.save();ctx.translate(k*24,-22);ctx.rotate(k*(-.6+bob*.12));ctx.beginPath();ctx.ellipse(0,0,15,9,0,0,7);ctx.fill();ctx.restore()}
+  // body
+  const bg=ctx.createRadialGradient(-10,-12,5,0,0,42);bg.addColorStop(0,'#f3a3b8');bg.addColorStop(1,'#d9647f');ctx.fillStyle=bg;
+  ctx.beginPath();ctx.ellipse(0,0,36,30,0,0,7);ctx.fill();
+  // eyes
+  for(const k of [-1,1]){ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(k*14,-2,10,11,0,0,7);ctx.fill();
+    ctx.fillStyle='#1b1b2f';ctx.beginPath();ctx.arc(k*14+2,-1,5.5,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(k*14+4,-3.5,2,0,7);ctx.fill()}
+  // cheeks and mouth
+  ctx.fillStyle='rgba(255,120,150,.5)';for(const k of [-1,1]){ctx.beginPath();ctx.ellipse(k*24,8,5,3,0,0,7);ctx.fill()}
+  ctx.strokeStyle='#8a2f4a';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.beginPath();ctx.arc(0,9,5,.2,Math.PI-.2);ctx.stroke();
+  ctx.restore()}
+function drawFog(t,px,py){if(save.fog==='none')return;const n=maze.n,wall=Math.max(4,cell*.11);
+  fctx.setTransform(dpr,0,0,dpr,0,0);fctx.globalCompositeOperation='source-over';fctx.clearRect(0,0,W,H);
+  fctx.fillStyle='rgba(1,6,14,.985)';fctx.fillRect(0,0,W,H);fctx.globalCompositeOperation='destination-out';
+  if(save.fog==='lantern'){fctx.fillStyle='rgba(0,0,0,.62)';for(const k of seenCells){const r=Math.floor(k/n),c=k%n;
+    fctx.fillRect(ox+c*cell-wall,oy+r*cell-wall,cell+2*wall,cell+2*wall)}}
+  const R=cell*(2.1+Math.sin(t/700)*.05),g=fctx.createRadialGradient(px,py,0,px,py,R);
+  g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(.55,'rgba(0,0,0,.95)');g.addColorStop(1,'rgba(0,0,0,0)');
+  fctx.fillStyle=g;fctx.beginPath();fctx.arc(px,py,R,0,7);fctx.fill();
+  ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(fogc,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
+  // lantern warmth
+  const w=ctx.createRadialGradient(px,py,0,px,py,cell*1.2);w.addColorStop(0,'rgba(255,220,150,.18)');w.addColorStop(1,'rgba(255,220,150,0)');
+  ctx.fillStyle=w;ctx.beginPath();ctx.arc(px,py,cell*1.2,0,7);ctx.fill()}
+
+function frame(t){ctx.setTransform(dpr,0,0,dpr,0,0);
+  const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#08203a');bg.addColorStop(1,'#030b16');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,255,255,.35)';for(const p of snow){p.y+=p.v/60;if(p.y>1)p.y=0;ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.s*.5,0,7);ctx.fill()}
+  drawMaze(t);
+  let px=cx(pl.c),py=cy(pl.r);
+  if(anim){let k=Math.min(1,(t-anim.t0)/anim.dur);k=k*k*(3-2*k);px=cx(anim.from[1])+(cx(anim.to[1])-cx(anim.from[1]))*k;py=cy(anim.from[0])+(cy(anim.to[0])-cy(anim.from[0]))*k;
+    if(t-anim.t0>=anim.dur)arrived()}
+  if(bump){const k=(t-bump.t0)/220;if(k>=1)bump=null;else{const a=Math.sin(k*Math.PI)*cell*(bump.cur?.28:.12);px+=DIRS[bump.d][1]*a;py+=DIRS[bump.d][0]*a;
+    if(bump.cur){ctx.fillStyle='rgba(170,235,255,.7)';for(let i=0;i<5;i++){const q=(k+i/5)%1;ctx.beginPath();ctx.arc(px-DIRS[bump.d][1]*q*cell*.6+(i-2)*cell*.08,py-DIRS[bump.d][0]*q*cell*.6+((i*7)%5-2)*cell*.08,cell*.03,0,7);ctx.fill()}}}}
+  if(swirl){const k=(t-swirl)/700;ctx.save();ctx.globalAlpha=Math.max(0,1-k);ctx.translate(px,py);ctx.rotate(k*12);ctx.scale(1-k*.8,1-k*.8);drawMendako(0,0,t,facing);ctx.restore();
+    ctx.strokeStyle='rgba(170,235,255,.8)';ctx.lineWidth=cell*.05;for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(px,py,cell*(.3+i*.2)*(1-k*.5),k*8+i*2,k*8+i*2+4);ctx.stroke()}}
+  else drawMendako(px,py,t,facing);
+  drawFog(t,px,py);
+  if(t<hintUntil){ctx.fillStyle=`rgba(255,217,122,${.55+.3*Math.sin(t/120)})`;for(const [r,c] of hintCells){ctx.beginPath();ctx.arc(cx(c),cy(r),cell*.14,0,7);ctx.fill()}}
+  if(won){ctx.fillStyle='rgba(255,255,255,.8)';for(let i=0;i<25;i++){const q=((t/1500)+i*.137)%1;ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(W*((i*.618)%1),H*(1-q),2+(i%3)*2,0,7);ctx.fill()}ctx.globalAlpha=1}
+  requestAnimationFrame(frame)}
+
+newMaze();layout();syncSettings();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
