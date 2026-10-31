@@ -19,6 +19,9 @@ The game draws each maze in one of two ways; the みかた ⇄ button at the top
   She can't stand there or walk past it: stepping in drops her to the first solid floor below, through several floors if the holes line up.
   Holes can open in otherwise solid floors, and a ladder never leads down into one.
   This is a different class of maze: the holes cut floors into pieces as well as sending her down.
+- **よこから・ぜんぶ** (from the side, everything): ladders, both kinds of hole, and hot vents.
+  A vent sits on the floor under a gap in the ceiling; the cell it's in can't be stood on, and stepping in blows her up to the first ordinary cell above, through several floors if vents line up.
+  A hole can never drop her onto a vent and a vent can never blow her into a hole, because the edge a hole drops through and the edge a vent pushes through can't be the same edge.
 - **うえから** (from above): a square grid seen from above, where one-way passages are currents of chevrons she can only swim along with.
 
 The view is zoomed in, with the camera following the octopus (from the side a whole floor's width is always shown, and the camera scrolls up the tower); when the maze doesn't fit on the screen a 🗺️ button toggles a view of the whole maze.
@@ -42,7 +45,8 @@ Levels get bigger (5×5 up to 12×12 from above; 4 to 8 floors and 10 to 14 tile
 - ⚙️ settings:
   - **くらさ** (darkness): あかるい shows the whole maze; ランタン (default) shows what's near the octopus and dimly remembers where she has been; まっくら shows only what's near and remembers nothing.
   - **いきどまり の わな** (dead-end traps): off by default. On, some regions can be entered but not left; a 🌀 whirlpool button then takes her back to the start.
-  - **みかた** (view): よこから (default), よこから・あなに おちる, or うえから.
+  - **みかた** (view): よこから (default), よこから・あなに おちる, よこから・ぜんぶ, or うえから.
+  - The 🔦 button at the top right of the maze turns the fog off and back on.
   - **レベル** to jump between levels, and あたらしい めいろ for a fresh maze at the same level.
 
 Progress (level, pearls found, settings) is saved in the browser on that device.
