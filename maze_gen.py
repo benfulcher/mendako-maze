@@ -473,8 +473,10 @@ def main(argv=None):
     print(f"passages {n_pass}, one-way {n_one} ({n_one / n_pass:.0%}){short}, "
           f"walls {len(maze.edges) - n_pass}", file=sys.stderr)
     print(f"solution length {len(path) - 1} steps, {on_path} one-way steps", file=sys.stderr)
+    standable = [c for c in maze.cells() if not maze.is_hole(c)]
     print(f"cells: {len(reach)} reachable, {len(traps)} trapped (no way to goal), "
-          f"{len(maze.cells()) - len(reach)} unreachable", file=sys.stderr)
+          f"{len(standable) - len(reach)} unreachable"
+          + (f", {len(maze.cells()) - len(standable)} swallowed by holes" if maze.forced else ""), file=sys.stderr)
     if floors is not None:
         print(f"floors: {max(floors.values()) + 1} (start on floor {floors[maze.start]}, "
               f"goal on floor {floors[maze.goal]})", file=sys.stderr)
