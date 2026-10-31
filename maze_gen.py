@@ -27,6 +27,9 @@ Generation
      --gravity  the one-way edges form a DAG, so every cell gets a floor
                 number and every one-way edge drops to a lower floor
                 (the platform / ladder / hole picture)
+     --platform rows are floors seen from the side: horizontal edges are
+                walls or open, vertical two-way edges are ladders (H) and
+                the only one-way edges are holes (o) that drop you one floor
 
 Usage
 -----
@@ -51,28 +54,29 @@ def ekey(a, b):
 
 
 class Maze:
-    def __init__(self, n, start, goal):
-        self.n = n
+    def __init__(self, rows, cols, start, goal):
+        self.rows = rows
+        self.cols = cols
         self.start = start
         self.goal = goal
         # Edge state: WALL, OPEN, or a tuple (u, v) meaning one-way u -> v.
         self.edges = {}
-        for r in range(n):
-            for c in range(n):
-                if c + 1 < n:
+        for r in range(rows):
+            for c in range(cols):
+                if c + 1 < cols:
                     self.edges[ekey((r, c), (r, c + 1))] = WALL
-                if r + 1 < n:
+                if r + 1 < rows:
                     self.edges[ekey((r, c), (r + 1, c))] = WALL
 
     # ---- graph queries ---------------------------------------------------
     def cells(self):
-        return [(r, c) for r in range(self.n) for c in range(self.n)]
+        return [(r, c) for r in range(self.rows) for c in range(self.cols)]
 
     def neighbours(self, cell):
         r, c = cell
         for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
             nr, nc = r + dr, c + dc
-            if 0 <= nr < self.n and 0 <= nc < self.n:
+            if 0 <= nr < self.rows and 0 <= nc < self.cols:
                 yield (nr, nc)
 
     def passable(self, u, v, oneway_only=False):
@@ -133,7 +137,7 @@ class Maze:
                 indeg[v] -= 1
                 if indeg[v] == 0:
                     q.append(v)
-        if len(order) != self.n * self.n:
+        if len(order) != len(self.cells()):
             return None  # a directed cycle made only of one-way edges
         floors = {c: 0 for c in self.cells()}
         for u in reversed(order):
@@ -145,7 +149,7 @@ class Maze:
         reach = self.reachable_from_start()
         if self.goal not in reach:
             return False
-        if keep_all and len(reach) != self.n * self.n:
+        if keep_all and len(reach) != len(self.cells()):
             return False
         if fair and not reach <= self.can_reach_goal():
             return False
@@ -157,8 +161,7 @@ class Maze:
 # ---- generation ----------------------------------------------------------
 def carve_tree(maze, rng):
     """Recursive backtracker: a random spanning tree of two-way passages."""
-    n = maze.n
-    start = (rng.randrange(n), rng.randrange(n))
+    start = (rng.randrange(maze.rows), rng.randrange(maze.cols))
     visited = {start}
     stack = [start]
     while stack:
@@ -181,21 +184,23 @@ def add_loops(maze, rng, k):
         maze.edges[e] = OPEN
 
 
-def orient_edges(maze, rng, fraction, fair, gravity, keep_all):
+def orient_edges(maze, rng, fraction, fair, gravity, keep_all, platform=False):
     """Make about `fraction` of the passages one-way, keeping the maze valid.
 
     Each passage is tried in a random direction, then the other; if neither
-    keeps the maze valid it stays two-way.  Returns the number converted.
+    keeps the maze valid it stays two-way.  In platform mode only vertical
+    passages are tried, and only downward (holes).  Returns the number converted.
     """
-    passages = [e for e, s in maze.edges.items() if s == OPEN]
+    passages = [e for e, s in maze.edges.items() if s == OPEN
+                and not (platform and e[0][0] == e[1][0])]
     rng.shuffle(passages)
     target = round(fraction * len(passages))
     made = 0
     for e in passages:
         if made >= target:
             break
-        a, b = e
-        for direction in rng.sample([(a, b), (b, a)], 2):
+        a, b = e  # a is above b (or left of b)
+        for direction in ([(a, b)] if platform else rng.sample([(a, b), (b, a)], 2)):
             maze.edges[e] = direction
             if maze.is_valid(fair, gravity, keep_all):
                 made += 1
@@ -206,24 +211,28 @@ def orient_edges(maze, rng, fraction, fair, gravity, keep_all):
 
 
 def generate(n, seed=None, oneway=0.25, loops=None, fair=False, gravity=False,
-             keep_all=False, start=None, goal=None):
+             keep_all=False, start=None, goal=None, rows=None, platform=False):
     """Build a maze; returns (maze, one-way edges made, one-way edges targeted)."""
     rng = random.Random(seed)
+    rows = rows or n
     start = start or (0, 0)
-    goal = goal or (n - 1, n - 1)
-    maze = Maze(n, start, goal)
+    goal = goal or (rows - 1, n - 1)
+    maze = Maze(rows, n, start, goal)
     carve_tree(maze, rng)
-    add_loops(maze, rng, n if loops is None else loops)
-    made, target = orient_edges(maze, rng, oneway, fair, gravity, keep_all)
+    add_loops(maze, rng, max(rows, n) if loops is None else loops)
+    made, target = orient_edges(maze, rng, oneway, fair, gravity, keep_all, platform)
     assert maze.solution() is not None, "generator produced an unsolvable maze"
     return maze, made, target
 
 
 # ---- rendering -----------------------------------------------------------
-def render_ascii(maze, path=None):
-    """Cells are 3 chars wide and 1 high; arrows mark one-way passages."""
-    n = maze.n
-    H, W = 2 * n + 1, 4 * n + 1
+def render_ascii(maze, path=None, platform=False):
+    """Cells are 3 chars wide and 1 high; arrows mark one-way passages.
+
+    In platform mode a two-way vertical passage is a ladder (H) and a
+    one-way one is a hole (o); floors are numbered from the bottom.
+    """
+    H, W = 2 * maze.rows + 1, 4 * maze.cols + 1
     g = [[" "] * W for _ in range(H)]
     for i in range(H):
         for j in range(W):
@@ -244,7 +253,9 @@ def render_ascii(maze, path=None):
         else:  # boundary between two cells in the same column
             i, j = 2 * max(r1, r2), 4 * c1 + 1
             if st == OPEN:
-                mark = "   "
+                mark = " H " if platform else "   "
+            elif platform:
+                mark = " o "
             else:
                 mark = " v " if st[1][0] > st[0][0] else " ^ "
             g[i][j:j + 3] = list(mark)
@@ -255,18 +266,20 @@ def render_ascii(maze, path=None):
     gr, gc = maze.goal
     g[2 * sr + 1][4 * sc + 2] = "S"
     g[2 * gr + 1][4 * gc + 2] = "G"
-    return "\n".join("".join(row) for row in g)
+    lines = ["".join(row) for row in g]
+    if platform:
+        lines = [(f"{maze.rows - i // 2:2d} " if i % 2 else "   ") + ln for i, ln in enumerate(lines)]
+    return "\n".join(lines)
 
 
 def render_svg(maze, path=None, cell=28, margin=12):
-    n = maze.n
-    size = 2 * margin + n * cell
+    width, height = 2 * margin + maze.cols * cell, 2 * margin + maze.rows * cell
     X = lambda c: margin + c * cell  # noqa: E731
     Y = lambda r: margin + r * cell  # noqa: E731
     out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        f'viewBox="0 0 {size} {size}">',
-        f'<rect width="{size}" height="{size}" fill="white"/>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">',
+        f'<rect width="{width}" height="{height}" fill="white"/>',
     ]
     if path:
         pts = " ".join(f"{X(c) + cell / 2:.1f},{Y(r) + cell / 2:.1f}" for r, c in path)
@@ -306,7 +319,7 @@ def render_svg(maze, path=None, cell=28, margin=12):
                               f"{cx:.1f},{y + d * s / 2:.1f}")
     out.append(f'<path d="{" ".join(walls)}" stroke="black" stroke-width="2" '
                f'stroke-linecap="square" fill="none"/>')
-    out.append(f'<rect x="{X(0)}" y="{Y(0)}" width="{n * cell}" height="{n * cell}" '
+    out.append(f'<rect x="{X(0)}" y="{Y(0)}" width="{maze.cols * cell}" height="{maze.rows * cell}" '
                f'fill="none" stroke="black" stroke-width="3"/>')
     for pts in arrows:
         out.append(f'<polygon points="{pts}" fill="#c0392b"/>')
@@ -323,10 +336,10 @@ def to_dict(maze, path=None, floors=None):
             edges.append({"cells": [a, b], "type": "open"})
         else:
             edges.append({"cells": [a, b], "type": "oneway", "from": st[0], "to": st[1]})
-    d = {"size": maze.n, "start": maze.start, "goal": maze.goal,
+    d = {"rows": maze.rows, "cols": maze.cols, "start": maze.start, "goal": maze.goal,
          "edges": edges, "solution": path}
     if floors is not None:
-        d["floors"] = [[floors[(r, c)] for c in range(maze.n)] for r in range(maze.n)]
+        d["floors"] = [[floors[(r, c)] for c in range(maze.cols)] for r in range(maze.rows)]
     return d
 
 
@@ -339,7 +352,10 @@ def parse_cell(text):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("-n", "--size", type=int, default=10, help="grid side length (default 10)")
+    p.add_argument("-n", "--size", type=int, default=10, help="columns (and rows unless --rows) (default 10)")
+    p.add_argument("--rows", type=int, help="rows, or floors with --platform (default: same as --size)")
+    p.add_argument("--platform", action="store_true",
+                   help="side view: floors joined by ladders (two-way) and holes (down only)")
     p.add_argument("--seed", type=int, help="random seed for a reproducible maze")
     p.add_argument("--oneway", type=float, default=0.25,
                    help="target fraction of passages made one-way (default 0.25)")
@@ -363,25 +379,25 @@ def main(argv=None):
     maze, made, target = generate(
         args.size, seed=args.seed, oneway=args.oneway, loops=args.loops,
         fair=args.fair, gravity=args.gravity, keep_all=args.keep_all,
-        start=args.start, goal=args.goal)
+        start=args.start, goal=args.goal, rows=args.rows, platform=args.platform)
     path = maze.solution()
     floors = maze.oneway_floors() if args.gravity else None
 
     if not args.quiet:
-        print(render_ascii(maze, path if args.solution else None))
+        print(render_ascii(maze, path if args.solution else None, args.platform))
 
     n_pass = sum(1 for s in maze.edges.values() if s != WALL)
     n_one = sum(1 for s in maze.edges.values() if s not in (WALL, OPEN))
     on_path = sum(1 for u, v in zip(path, path[1:]) if maze.edges[ekey(u, v)] == (u, v))
     reach = maze.reachable_from_start()
     traps = reach - maze.can_reach_goal()
-    print(f"size {args.size}x{args.size}, seed {args.seed}", file=sys.stderr)
+    print(f"size {maze.rows}x{maze.cols}, seed {args.seed}", file=sys.stderr)
     short = f" (constraints allowed only {made} of the {target} targeted)" if made < target else ""
     print(f"passages {n_pass}, one-way {n_one} ({n_one / n_pass:.0%}){short}, "
           f"walls {len(maze.edges) - n_pass}", file=sys.stderr)
     print(f"solution length {len(path) - 1} steps, {on_path} one-way steps", file=sys.stderr)
     print(f"cells: {len(reach)} reachable, {len(traps)} trapped (no way to goal), "
-          f"{maze.n ** 2 - len(reach)} unreachable", file=sys.stderr)
+          f"{len(maze.cells()) - len(reach)} unreachable", file=sys.stderr)
     if floors is not None:
         print(f"floors: {max(floors.values()) + 1} (start on floor {floors[maze.start]}, "
               f"goal on floor {floors[maze.goal]})", file=sys.stderr)

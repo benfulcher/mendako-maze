@@ -50,6 +50,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(14,42,68,.92);
   border-radius:14px;padding:8px 16px;font-size:clamp(16px,2.6vmin,22px);z-index:4;
   transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#mapBtn{position:absolute;right:10px;top:10px;background:rgba(14,42,68,.9);border-radius:14px;padding:8px 12px;
+  font-size:clamp(20px,3.2vmin,28px);box-shadow:0 4px 0 #0c2238;z-index:4}
+#mapBtn:focus{outline:none}
+#mapBtn.on{background:#2a7fb8;box-shadow:0 4px 0 #17537a}
 #rescue{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#2a7fb8;
   border-radius:16px;padding:10px 18px;font-size:clamp(17px,2.8vmin,24px);box-shadow:0 4px 0 #17537a;z-index:4}
 [hidden]{display:none!important}
@@ -65,6 +69,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <canvas id="cv"></canvas>
     <div id="toast" hidden></div>
     <button id="rescue" hidden>🌀 うずしおで スタートに もどる</button>
+    <button id="mapBtn" hidden title="ちず">🗺️</button>
     <div id="win" class="overlay" hidden>
       <div class="card">
         <h2>やったー！</h2>
@@ -75,6 +80,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
     <div id="settings" class="overlay" hidden>
       <div class="card">
         <h2>せってい</h2>
+        <div class="opt"><span>みかた</span><div class="row" id="viewOpts">
+          <button data-view="random">どちらも</button>
+          <button data-view="side">よこから</button>
+          <button data-view="top">うえから</button></div></div>
         <div class="opt"><span>くらさ</span><div class="row" id="fogOpts">
           <button data-fog="none">あかるい</button>
           <button data-fog="lantern">ランタン</button>
@@ -114,10 +123,10 @@ function shuffle(a,rng){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(
 //   0 wall (rock)   1 two-way passage   2 one-way toward +index (right/down)   3 one-way toward -index
 const DIRS=[[-1,0],[0,1],[1,0],[0,-1]]; // up right down left
 class Maze{
-  constructor(n,start,goal){this.n=n;this.start=start;this.goal=goal;
-    this.h=Array.from({length:n},()=>Array(n-1).fill(0));
-    this.v=Array.from({length:n-1},()=>Array(n).fill(0))}
-  inside(r,c){return r>=0&&c>=0&&r<this.n&&c<this.n}
+  constructor(R,C,start,goal){this.R=R;this.C=C;this.start=start;this.goal=goal;
+    this.h=Array.from({length:R},()=>Array(C-1).fill(0));
+    this.v=Array.from({length:R-1},()=>Array(C).fill(0))}
+  inside(r,c){return r>=0&&c>=0&&r<this.R&&c<this.C}
   edge(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(!this.inside(nr,nc))return null;
     return DIRS[d][0]===0?{arr:this.h,i:r,j:Math.min(c,nc),fwd:nc>c}:{arr:this.v,i:Math.min(r,nr),j:c,fwd:nr>r}}
   state(r,c,d){const e=this.edge(r,c,d);return e?e.arr[e.i][e.j]:0}
@@ -127,38 +136,39 @@ class Maze{
     return (s===2&&!e.fwd)||(s===3&&e.fwd)}
   canCome(r,c,d){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];return this.inside(nr,nc)&&this.canGo(nr,nc,(d+2)%4)}
   // Parent index per cell reached from src (forwards, or backwards along edges), -1 if unreached.
-  bfs(src,back){const n=this.n,par=new Int32Array(n*n).fill(-1),q=[src];par[src[0]*n+src[1]]=src[0]*n+src[1];
+  bfs(src,back){const n=this.C,par=new Int32Array(this.R*n).fill(-1),q=[src];par[src[0]*n+src[1]]=src[0]*n+src[1];
     for(let qi=0;qi<q.length;qi++){const [r,c]=q[qi];for(let d=0;d<4;d++){
       if(!(back?this.canCome(r,c,d):this.canGo(r,c,d)))continue;
       const nr=r+DIRS[d][0],nc=c+DIRS[d][1],k=nr*n+nc;if(par[k]<0){par[k]=r*n+c;q.push([nr,nc])}}}
     return par}
-  pathFrom(src){const n=this.n,par=this.bfs(src,false),g=this.goal[0]*n+this.goal[1];if(par[g]<0)return null;
+  pathFrom(src){const n=this.C,par=this.bfs(src,false),g=this.goal[0]*n+this.goal[1];if(par[g]<0)return null;
     const out=[];let k=g;for(;;){out.push([Math.floor(k/n),k%n]);if(k===src[0]*n+src[1])break;k=par[k]}return out.reverse()}
-  valid(o){const n=this.n,fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
+  valid(o){const n=this.C,fw=this.bfs(this.start,false);if(fw[this.goal[0]*n+this.goal[1]]<0)return false;
     if(o.keepAll&&fw.includes(-1))return false;
-    if(o.fair){const bk=this.bfs(this.goal,true);for(let k=0;k<n*n;k++)if(fw[k]>=0&&bk[k]<0)return false}
+    if(o.fair){const bk=this.bfs(this.goal,true);for(let k=0;k<fw.length;k++)if(fw[k]>=0&&bk[k]<0)return false}
     return true}
 }
-function generate(n,rng,o){
-  const m=new Maze(n,[0,0],[n-1,n-1]);
+function generate(R,C,rng,o){
+  const m=new Maze(R,C,[0,0],[R-1,C-1]);
   // 1. spanning tree of two-way passages (recursive backtracker)
-  const seen=Array.from({length:n},()=>Array(n).fill(false));
-  const r0=Math.floor(rng()*n),c0=Math.floor(rng()*n);seen[r0][c0]=true;const st=[[r0,c0]];
+  const seen=Array.from({length:R},()=>Array(C).fill(false));
+  const r0=Math.floor(rng()*R),c0=Math.floor(rng()*C);seen[r0][c0]=true;const st=[[r0,c0]];
   while(st.length){const [r,c]=st[st.length-1],opt=[];
     for(let d=0;d<4;d++){const nr=r+DIRS[d][0],nc=c+DIRS[d][1];if(m.inside(nr,nc)&&!seen[nr][nc])opt.push(d)}
     if(!opt.length){st.pop();continue}
     const d=opt[Math.floor(rng()*opt.length)],e=m.edge(r,c,d);e.arr[e.i][e.j]=1;
     const nr=r+DIRS[d][0],nc=c+DIRS[d][1];seen[nr][nc]=true;st.push([nr,nc])}
   // 2. extra openings, so there are loops
-  const walls=[];for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(!m.h[r][c])walls.push([m.h,r,c]);
-  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(!m.v[r][c])walls.push([m.v,r,c]);
+  const walls=[];for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(!m.h[r][c])walls.push([m.h,r,c]);
+  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(!m.v[r][c])walls.push([m.v,r,c]);
   shuffle(walls,rng);for(const [a,i,j] of walls.slice(0,o.loops))a[i][j]=1;
-  // 3. one-way currents, each kept only if the maze stays valid
-  const open=[];for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
-  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(m.v[r][c]===1)open.push([m.v,r,c]);
+  // 3. one-way passages, each kept only if the maze stays valid.
+  //    Platform mode: only vertical edges, and only downward (holes in the floor).
+  const open=[];if(!o.platform)for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(m.h[r][c]===1)open.push([m.h,r,c]);
+  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(m.v[r][c]===1)open.push([m.v,r,c]);
   shuffle(open,rng);const target=Math.round(o.oneway*open.length);let made=0;
   for(const [a,i,j] of open){if(made>=target)break;const first=rng()<.5?2:3;let ok=false;
-    for(const s of [first,5-first]){a[i][j]=s;if(m.valid(o)){ok=true;break}}
+    for(const s of (o.platform?[2]:[first,5-first])){a[i][j]=s;if(m.valid(o)){ok=true;break}}
     if(ok)made++;else a[i][j]=1}
   return m;
 }
@@ -176,37 +186,47 @@ const SFX=(()=>{let ac=null;const on=()=>save.sound;
     push:()=>{tone(300,0,.25,'sawtooth',.05,120);tone(900,0,.2,'sine',.04,400)},
     pearl:()=>[523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.11,.35,'triangle',.12)),
     swirl:()=>tone(200,0,.7,'sine',.1,900),
+    fall:()=>tone(700,0,.3,'sine',.08,180),
     hint:()=>tone(880,0,.15,'sine',.08)}})();
 
 // ---------------------------------------------------------------- state
 const SAVE='mendako-maze';
-let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1};
+let save={level:1,pearls:0,fog:'lantern',traps:0,sound:1,view:'random'};
 try{Object.assign(save,JSON.parse(localStorage.getItem(SAVE)||'{}'))}catch(e){}
 function persist(){try{localStorage.setItem(SAVE,JSON.stringify(save))}catch(e){}}
 
-function params(L){const n=Math.min(4+Math.ceil(L/2),12);
-  return{n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true}}
+let curView='side',mapMode=false,fits=true;
+const side=()=>curView==='side';
+function params(L){
+  if(side()){const R=Math.min(3+Math.ceil(L/2),8),C=Math.min(4+Math.ceil(L/3),14);
+    return{R,C,oneway:Math.min(.3+.05*L,.7),loops:Math.round((R+C)/2),fair:!save.traps,keepAll:true,platform:true}}
+  const n=Math.min(4+Math.ceil(L/2),12);
+  return{R:n,C:n,oneway:Math.min(.12+.04*L,.45),loops:n,fair:!save.traps,keepAll:true,platform:false}}
 
 let maze,pl,steps,won,anim=null,bump=null,seenCells,canReachGoal,hintCells=[],hintUntil=0,facing=1,swirl=0;
 function newMaze(){
-  const p=params(save.level),rng=mulberry32((Date.now()^(Math.random()*1e9))>>>0);
-  maze=generate(p.n,rng,p);
+  const rng=mulberry32((Date.now()^(Math.random()*1e9))>>>0);
+  curView=save.view==='random'?(rng()<.5?'side':'top'):save.view;
+  const p=params(save.level);maze=generate(p.R,p.C,rng,p);mapMode=false;
   pl={r:0,c:0};steps=0;won=false;anim=null;bump=null;hintCells=[];facing=1;
   seenCells=new Set();canReachGoal=maze.bfs(maze.goal,true);
   reveal();$('win').hidden=true;$('rescue').hidden=true;status();if(W)layout()}
-function reveal(){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=pl.r+dr,c=pl.c+dc;if(maze.inside(r,c))seenCells.add(r*maze.n+c)}}
+function reveal(){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const r=pl.r+dr,c=pl.c+dc;if(maze.inside(r,c))seenCells.add(r*maze.C+c)}}
 function status(){$('status').textContent=`レベル${save.level}・しんじゅ${save.pearls}・${steps}ほ`}
 let toastT=0;function toast(t,ms=1800){const el=$('toast');el.textContent=t;el.hidden=false;el.style.opacity=1;clearTimeout(toastT);
   toastT=setTimeout(()=>{el.style.opacity=0;setTimeout(()=>el.hidden=true,300)},ms)}
 
 function tryMove(d){if(won||anim||swirl)return;SFX.unlock();const {r,c}=pl;
   if(d===1)facing=1;if(d===3)facing=-1;
-  if(maze.canGo(r,c,d)){anim={from:[r,c],to:[r+DIRS[d][0],c+DIRS[d][1]],t0:performance.now(),dur:150};steps++;status();SFX.step()}
-  else{const cur=maze.isCurrentAgainst(r,c,d);bump={d,t0:performance.now(),cur};if(cur){SFX.push();toast('ながれが つよくて すすめない！',1200)}else SFX.bump()}}
+  if(maze.canGo(r,c,d)){const st=maze.state(r,c,d),kind=!side()||DIRS[d][0]===0?'walk':(st===2?'fall':'climb');
+    anim={from:[r,c],to:[r+DIRS[d][0],c+DIRS[d][1]],t0:performance.now(),dur:kind==='walk'?150:kind==='climb'?280:320,kind};
+    steps++;status();if(kind==='fall')SFX.fall();else SFX.step()}
+  else{const cur=maze.isCurrentAgainst(r,c,d);bump={d,t0:performance.now(),cur};
+    if(cur){if(side()){SFX.bump();toast('あなは のぼれないよ！',1200)}else{SFX.push();toast('ながれが つよくて すすめない！',1200)}}else SFX.bump()}}
 function arrived(){pl={r:anim.to[0],c:anim.to[1]};anim=null;reveal();
   if(pl.r===maze.goal[0]&&pl.c===maze.goal[1]){won=true;save.pearls++;persist();SFX.pearl();
     $('winText').textContent=`しんじゅを みつけた！ ${steps} ほ で ついたよ。`;setTimeout(()=>$('win').hidden=false,900);return}
-  const trapped=canReachGoal[pl.r*maze.n+pl.c]<0;$('rescue').hidden=!trapped;
+  const trapped=canReachGoal[pl.r*maze.C+pl.c]<0;$('rescue').hidden=!trapped;
   if(trapped)toast('いきどまり！ もう もどれない…',2200)}
 function rescue(){if(swirl)return;SFX.swirl();swirl=performance.now();$('rescue').hidden=true;
   setTimeout(()=>{pl={r:maze.start[0],c:maze.start[1]};reveal();swirl=0;toast('スタートに もどったよ')},700)}
@@ -221,7 +241,8 @@ let holdT=null;
 for(const b of document.querySelectorAll('#pad [data-d]')){
   b.addEventListener('pointerdown',e=>{e.preventDefault();const d=+b.dataset.d;tryMove(d);clearInterval(holdT);holdT=setInterval(()=>tryMove(d),170)});
   for(const ev of ['pointerup','pointercancel','pointerleave'])b.addEventListener(ev,()=>clearInterval(holdT))}
-$('hint').addEventListener('click',hint);$('rescue').addEventListener('click',rescue);
+$('hint').addEventListener('click',hint);$('mapBtn').addEventListener('click',e=>{mapMode=!mapMode;layout();e.currentTarget.blur()});
+for(const b of document.querySelectorAll('#viewOpts button'))b.addEventListener('click',()=>{if(save.view===b.dataset.view)return;save.view=b.dataset.view;persist();syncSettings();newMaze()});$('rescue').addEventListener('click',rescue);
 const cv=$('cv');let sw=null;
 cv.addEventListener('pointerdown',e=>{sw={x:e.clientX,y:e.clientY};SFX.unlock()});
 cv.addEventListener('pointerup',e=>{if(!sw)return;const dx=e.clientX-sw.x,dy=e.clientY-sw.y;sw=null;
@@ -237,6 +258,7 @@ for(const b of document.querySelectorAll('#fogOpts button'))b.addEventListener('
 for(const b of document.querySelectorAll('#trapOpts button'))b.addEventListener('click',()=>{save.traps=+b.dataset.trap;persist();syncSettings()});
 for(const b of document.querySelectorAll('#sndOpts button'))b.addEventListener('click',()=>{save.sound=+b.dataset.snd;persist();syncSettings()});
 function syncSettings(){$('lvShow').textContent=save.level;status();
+  for(const b of document.querySelectorAll('#viewOpts button'))b.classList.toggle('on',b.dataset.view===save.view);
   for(const b of document.querySelectorAll('#fogOpts button'))b.classList.toggle('on',b.dataset.fog===save.fog);
   for(const b of document.querySelectorAll('#trapOpts button'))b.classList.toggle('on',+b.dataset.trap===save.traps);
   for(const b of document.querySelectorAll('#sndOpts button'))b.classList.toggle('on',+b.dataset.snd===save.sound)}
@@ -246,17 +268,30 @@ const ctx=cv.getContext('2d'),fogc=document.createElement('canvas'),fctx=fogc.ge
 let W=0,H=0,dpr=1,cell=0,ox=0,oy=0;
 function layout(){const st=$('stage');W=st.clientWidth;H=st.clientHeight;dpr=Math.min(window.devicePixelRatio||1,3);
   cv.width=fogc.width=Math.round(W*dpr);cv.height=fogc.height=Math.round(H*dpr);
-  const n=maze.n;cell=Math.floor(Math.min(W,H)*.95/n);ox=(W-cell*n)/2;oy=(H-cell*n)/2}
+  const fit=Math.floor(Math.min(W*.95/maze.C,H*.94/maze.R)),zoom=Math.floor(Math.min(W,H)/5.2);
+  fits=zoom<=fit;cell=(fits||mapMode)?fit:zoom;$('mapBtn').hidden=fits;$('mapBtn').classList.toggle('on',mapMode);
+  camSnap=true;camera()}
+// Camera: centred on the octopus, clamped to the maze; the whole maze is centred when it fits.
+let camX=0,camY=0,camSnap=true;
+function camera(){const fr=pcell(),w=cell*maze.C,h=cell*maze.R,pad=cell*.1;
+  let tx=w<=W?(W-w)/2:Math.min(pad,Math.max(W-w-pad,W/2-(fr[1]+.5)*cell));
+  let ty=h<=H?(H-h)/2:Math.min(pad,Math.max(H-h-pad,H/2-(fr[0]+.5)*cell));
+  if(camSnap){camX=tx;camY=ty;camSnap=false}else{camX+=(tx-camX)*.12;camY+=(ty-camY)*.12}
+  ox=camX;oy=camY}
+function pcell(){if(!anim)return[pl.r,pl.c];const k=Math.min(1,(performance.now()-anim.t0)/anim.dur);
+  return[anim.from[0]+(anim.to[0]-anim.from[0])*k,anim.from[1]+(anim.to[1]-anim.from[1])*k]}
 window.addEventListener('resize',layout);
 const snow=Array.from({length:60},()=>({x:Math.random(),y:Math.random(),s:Math.random()*2+1,v:Math.random()*.02+.01}));
 const cx=c=>ox+c*cell+cell/2,cy=r=>oy+r*cell+cell/2;
+// where the octopus sits in a cell: centred from above, on the floor from the side
+const ppos=(r,c)=>side()?[cx(c)-cell*.06,oy+(r+1)*cell-cell*.37]:[cx(c),cy(r)];
 
-function drawMaze(t){const n=maze.n,wall=Math.max(4,cell*.11);
+function drawMaze(t){if(side())return drawSide(t);const R=maze.R,C=maze.C,wall=Math.max(4,cell*.11);
   // floor
-  ctx.fillStyle='#0d2c4a';ctx.fillRect(ox,oy,cell*n,cell*n);
-  ctx.fillStyle='rgba(255,255,255,.03)';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if((r+c)&1)ctx.fillRect(ox+c*cell,oy+r*cell,cell,cell);
+  ctx.fillStyle='#0d2c4a';ctx.fillRect(ox,oy,cell*C,cell*R);
+  ctx.fillStyle='rgba(255,255,255,.03)';for(let r=0;r<R;r++)for(let c=0;c<C;c++)if((r+c)&1)ctx.fillRect(ox+c*cell,oy+r*cell,cell,cell);
   // currents (one-way passages)
-  for(let r=0;r<n;r++)for(let c=0;c<n;c++)for(const d of [1,2]){const s=maze.state(r,c,d);if(s<2)continue;
+  for(let r=0;r<R;r++)for(let c=0;c<C;c++)for(const d of [1,2]){const s=maze.state(r,c,d);if(s<2)continue;
     const fwd=s===2;const nr=r+DIRS[d][0],nc=c+DIRS[d][1];
     const mx=(cx(c)+cx(nc))/2,my=(cy(r)+cy(nr))/2;const ddr=fwd?DIRS[d][0]:-DIRS[d][0],ddc=fwd?DIRS[d][1]:-DIRS[d][1];
     ctx.save();ctx.translate(mx,my);ctx.rotate(Math.atan2(ddr,ddc));
@@ -268,18 +303,45 @@ function drawMaze(t){const n=maze.n,wall=Math.max(4,cell*.11);
     ctx.restore()}
   // walls
   ctx.strokeStyle='#7f8fa6';ctx.lineWidth=wall;ctx.lineCap='round';ctx.beginPath();
-  for(let r=0;r<n;r++)for(let c=0;c<n-1;c++)if(!maze.h[r][c]){const x=ox+(c+1)*cell;ctx.moveTo(x,oy+r*cell);ctx.lineTo(x,oy+(r+1)*cell)}
-  for(let r=0;r<n-1;r++)for(let c=0;c<n;c++)if(!maze.v[r][c]){const y=oy+(r+1)*cell;ctx.moveTo(ox+c*cell,y);ctx.lineTo(ox+(c+1)*cell,y)}
-  ctx.stroke();ctx.strokeStyle='#9aa9bd';ctx.lineWidth=wall*1.3;ctx.strokeRect(ox,oy,cell*n,cell*n);
-  // goal: a pearl in a clam
-  const gx=cx(maze.goal[1]),gy=cy(maze.goal[0]),pr=cell*.2,bob=Math.sin(t/600)*cell*.02;
-  ctx.save();ctx.translate(gx,gy+cell*.08);
+  for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(!maze.h[r][c]){const x=ox+(c+1)*cell;ctx.moveTo(x,oy+r*cell);ctx.lineTo(x,oy+(r+1)*cell)}
+  for(let r=0;r<R-1;r++)for(let c=0;c<C;c++)if(!maze.v[r][c]){const y=oy+(r+1)*cell;ctx.moveTo(ox+c*cell,y);ctx.lineTo(ox+(c+1)*cell,y)}
+  ctx.stroke();ctx.strokeStyle='#9aa9bd';ctx.lineWidth=wall*1.3;ctx.strokeRect(ox,oy,cell*C,cell*R);
+  drawPearl(cx(maze.goal[1]),cy(maze.goal[0])+cell*.08,t)}
+function drawPearl(gx,gy,t){const pr=cell*.2,bob=Math.sin(t/600)*cell*.02;
+  ctx.save();ctx.translate(gx,gy);
   ctx.fillStyle='#c98f5a';ctx.beginPath();ctx.ellipse(0,cell*.12,cell*.33,cell*.16,0,0,Math.PI);ctx.fill();
   ctx.fillStyle='#e7b98a';ctx.beginPath();ctx.ellipse(0,-cell*.02,cell*.33,cell*.2,0,Math.PI,2*Math.PI);ctx.fill();
   ctx.fillStyle='#b07a4c';ctx.beginPath();ctx.ellipse(0,-cell*.02,cell*.3,cell*.1,0,Math.PI,2*Math.PI);ctx.fill();
   ctx.shadowColor='#fff6d5';ctx.shadowBlur=cell*.35;const pg=ctx.createRadialGradient(-pr*.3,-pr*.3-bob,pr*.1,0,-bob,pr);
-  pg.addColorStop(0,'#ffffff');pg.addColorStop(1,'#d9d2ff');ctx.fillStyle=pg;ctx.beginPath();ctx.arc(0,-pr*.1+bob,pr,0,7);ctx.fill();ctx.restore();
-}
+  pg.addColorStop(0,'#ffffff');pg.addColorStop(1,'#d9d2ff');ctx.fillStyle=pg;ctx.beginPath();ctx.arc(0,-pr*.1+bob,pr,0,7);ctx.fill();ctx.restore()}
+
+// Side view: rows are floors, ladders join floors both ways, holes only drop you down.
+function drawSide(t){const R=maze.R,C=maze.C,th=Math.max(5,cell*.13),rock='#6d7f99',sand='#9c8a6c';
+  ctx.fillStyle='#0d2c4a';ctx.fillRect(ox,oy,cell*C,cell*R);
+  ctx.fillStyle='rgba(255,255,255,.025)';for(let r=0;r<R;r++)for(let c=0;c<C;c++)if((r+c)&1)ctx.fillRect(ox+c*cell,oy+r*cell,cell,cell);
+  // rock pillars (walls within a floor)
+  ctx.fillStyle=rock;for(let r=0;r<R;r++)for(let c=0;c<C-1;c++)if(!maze.h[r][c])ctx.fillRect(ox+(c+1)*cell-th/2,oy+r*cell,th,cell);
+  // ladders, drawn before the platforms so they pass through the gap
+  ctx.strokeStyle='#e3bf78';ctx.lineWidth=Math.max(3,cell*.055);ctx.lineCap='round';ctx.beginPath();
+  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===1){const x=cx(c),y=oy+(f+1)*cell,w=cell*.15,top=y-cell*.3,bot=y+cell*.95;
+    ctx.moveTo(x-w,top);ctx.lineTo(x-w,bot);ctx.moveTo(x+w,top);ctx.lineTo(x+w,bot);
+    for(let yy=top+cell*.12;yy<bot;yy+=cell*.2){ctx.moveTo(x-w,yy);ctx.lineTo(x+w,yy)}}
+  ctx.stroke();
+  // platforms, with a gap where there is a ladder or a hole
+  ctx.strokeStyle=sand;ctx.lineWidth=th;ctx.lineCap='butt';ctx.beginPath();
+  for(let f=0;f<R;f++){const y=oy+(f+1)*cell;for(let c=0;c<C;c++){const s=f<R-1?maze.v[f][c]:0,x0=ox+c*cell,x1=x0+cell;
+    if(s===0){ctx.moveTo(x0,y);ctx.lineTo(x1,y)}else{ctx.moveTo(x0,y);ctx.lineTo(x0+cell*.27,y);ctx.moveTo(x1-cell*.27,y);ctx.lineTo(x1,y)}}}
+  ctx.stroke();
+  // holes: black ovals in the floor
+  for(let f=0;f<R-1;f++)for(let c=0;c<C;c++)if(maze.v[f][c]===2){const x=cx(c),y=oy+(f+1)*cell;
+    ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(x,y,cell*.26,cell*.1,0,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(x,y,cell*.26,cell*.1,0,Math.PI,2*Math.PI);ctx.stroke()}
+  // outer rock
+  ctx.strokeStyle=rock;ctx.lineWidth=th*1.3;ctx.strokeRect(ox,oy,cell*C,cell*R);
+  // floor numbers
+  if(ox>=28){ctx.fillStyle='rgba(233,243,255,.45)';ctx.font=`${Math.round(Math.min(cell*.3,18))}px sans-serif`;ctx.textAlign='right';ctx.textBaseline='middle';
+    for(let f=0;f<R;f++)ctx.fillText(`${R-f}かい`,ox-8,oy+(f+1)*cell-cell*.35)}
+  drawPearl(cx(maze.goal[1]),oy+(maze.goal[0]+1)*cell-cell*.22,t)}
 function drawMendako(x,y,t,sx){const s=cell/100;ctx.save();ctx.translate(x,y+Math.sin(t/500)*cell*.03);ctx.scale(s*sx*.8,s*.8);
   const bob=Math.sin(t/500);
   // arms (skirt)
@@ -298,7 +360,7 @@ function drawMendako(x,y,t,sx){const s=cell/100;ctx.save();ctx.translate(x,y+Mat
   ctx.fillStyle='rgba(255,120,150,.5)';for(const k of [-1,1]){ctx.beginPath();ctx.ellipse(k*24,8,5,3,0,0,7);ctx.fill()}
   ctx.strokeStyle='#8a2f4a';ctx.lineWidth=2.2;ctx.lineCap='round';ctx.beginPath();ctx.arc(0,9,5,.2,Math.PI-.2);ctx.stroke();
   ctx.restore()}
-function drawFog(t,px,py){if(save.fog==='none')return;const n=maze.n,wall=Math.max(4,cell*.11);
+function drawFog(t,px,py){if(save.fog==='none')return;const n=maze.C,wall=Math.max(4,cell*.11);
   fctx.setTransform(dpr,0,0,dpr,0,0);fctx.globalCompositeOperation='source-over';fctx.clearRect(0,0,W,H);
   fctx.fillStyle='rgba(1,6,14,.985)';fctx.fillRect(0,0,W,H);fctx.globalCompositeOperation='destination-out';
   if(save.fog==='lantern'){fctx.fillStyle='rgba(0,0,0,.62)';for(const k of seenCells){const r=Math.floor(k/n),c=k%n;
@@ -311,12 +373,14 @@ function drawFog(t,px,py){if(save.fog==='none')return;const n=maze.n,wall=Math.m
   const w=ctx.createRadialGradient(px,py,0,px,py,cell*1.2);w.addColorStop(0,'rgba(255,220,150,.18)');w.addColorStop(1,'rgba(255,220,150,0)');
   ctx.fillStyle=w;ctx.beginPath();ctx.arc(px,py,cell*1.2,0,7);ctx.fill()}
 
-function frame(t){ctx.setTransform(dpr,0,0,dpr,0,0);
+function frame(t){ctx.setTransform(dpr,0,0,dpr,0,0);camera();
   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#08203a');bg.addColorStop(1,'#030b16');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
   ctx.fillStyle='rgba(255,255,255,.35)';for(const p of snow){p.y+=p.v/60;if(p.y>1)p.y=0;ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.s*.5,0,7);ctx.fill()}
   drawMaze(t);
-  let px=cx(pl.c),py=cy(pl.r);
-  if(anim){let k=Math.min(1,(t-anim.t0)/anim.dur);k=k*k*(3-2*k);px=cx(anim.from[1])+(cx(anim.to[1])-cx(anim.from[1]))*k;py=cy(anim.from[0])+(cy(anim.to[0])-cy(anim.from[0]))*k;
+  let [px,py]=ppos(pl.r,pl.c);
+  if(anim){let k=Math.min(1,(t-anim.t0)/anim.dur);k=anim.kind==='fall'?k*k:anim.kind==='climb'?k:k*k*(3-2*k);
+    const a=ppos(...anim.from),b=ppos(...anim.to);px=a[0]+(b[0]-a[0])*k;py=a[1]+(b[1]-a[1])*k;
+    if(anim.kind==='fall'){ctx.fillStyle='rgba(170,235,255,.6)';for(let i=0;i<4;i++){ctx.beginPath();ctx.arc(px+(i-1.5)*cell*.12,py-cell*(.3+i*.12)*k,cell*.03,0,7);ctx.fill()}}
     if(t-anim.t0>=anim.dur)arrived()}
   if(bump){const k=(t-bump.t0)/220;if(k>=1)bump=null;else{const a=Math.sin(k*Math.PI)*cell*(bump.cur?.28:.12);px+=DIRS[bump.d][1]*a;py+=DIRS[bump.d][0]*a;
     if(bump.cur){ctx.fillStyle='rgba(170,235,255,.7)';for(let i=0;i<5;i++){const q=(k+i/5)%1;ctx.beginPath();ctx.arc(px-DIRS[bump.d][1]*q*cell*.6+(i-2)*cell*.08,py-DIRS[bump.d][0]*q*cell*.6+((i*7)%5-2)*cell*.08,cell*.03,0,7);ctx.fill()}}}}
